@@ -6,7 +6,11 @@ import time
 
 class OpenAIClient:
     def __init__(self):
-        self.api_key = st.secrets["openai"]["api_key"]
+        try:
+            self.api_key = st.secrets["openai"]["api_key"]
+        except KeyError as e:
+            raise ValueError("OPENAI_API_KEY not found in Streamlit secrets") from e
+        
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not set in Streamlit secrets")
         self.client = OpenAI(api_key=self.api_key)
