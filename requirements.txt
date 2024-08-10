@@ -1,0 +1,11 @@
+streamlit
+openai
+python-docx
+pandas
+PyMuPDF
+Pillow
+moviepy
+requests
+python-pptx
+streamlit-aggrid
+streamlit-quill
