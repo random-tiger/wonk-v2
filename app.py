@@ -21,6 +21,8 @@ import pandas as pd
 from docx import Document
 import time
 
+api_key = st.secrets["OPENAI_API_KEY"]
+
 # Initialize OpenAI client
 openai_client = OpenAIClient()
 
