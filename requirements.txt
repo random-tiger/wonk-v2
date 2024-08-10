@@ -7,5 +7,7 @@ Pillow
 moviepy
 requests
 python-pptx
+pydub
 streamlit-aggrid
 streamlit-quill
+
