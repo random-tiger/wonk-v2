@@ -93,7 +93,12 @@ def main():
     if transcription:
         with st.expander("Transcription", expanded=True):
             st.subheader("Transcription")
-            editor_content = st_quill(value=transcription, key='transcription_editor')
+
+            if editor_content != transcription:
+                editor_content = transcription
+                st.session_state.editor_content = editor_content
+
+            editor_content = st_quill(value=editor_content, key='transcription_editor')
 
             if editor_content != st.session_state.editor_content:
                 st.session_state.editor_content = editor_content
@@ -238,19 +243,19 @@ def main():
                 action_items_list = action_items.split('\n')
                 action_items_list = [item for item in action_items_list if item]
 
-                action_items_dict = {}
+                action items_dict = {}
                 parent_task = None
 
                 for item in action_items_list:
                     if item.startswith("    "):
                         if parent_task:
-                            action_items_dict[parent_task].append(item.strip())
+                            action items_dict[parent_task].append(item.strip())
                     else:
                         parent_task = item.strip()
-                        action_items_dict[parent_task] = []
+                        action items_dict[parent_task] = []
 
                 grid_data = []
-                for idx, (parent, children) in enumerate(action_items_dict.items(), 1):
+                for idx, (parent, children) in enumerate(action items_dict.items(), 1):
                     grid_data.append({
                         "Task Number": idx,
                         "Task": parent,
