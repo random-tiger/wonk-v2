@@ -274,7 +274,7 @@ def main():
                 gb.configure_default_column(editable=True, resizable=True)
                 grid_options = gb.build()
 
-                grid_response = AgGrid(grid_df, gridOptions=grid_options, height=300, fit_columns on_grid_load=True, update_mode=GridUpdateMode.MODEL_CHANGED)
+                grid_response = AgGrid(grid_df, gridOptions=grid_options, height=300, fit_columns_on_grid_load=True, update_mode=GridUpdateMode.MODEL_CHANGED)
 
                 if isinstance(grid_response['data'], pd.DataFrame):
                     for index, row in grid_response['data'].iterrows():
