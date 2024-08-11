@@ -243,19 +243,19 @@ def main():
                 action_items_list = action_items.split('\n')
                 action_items_list = [item for item in action_items_list if item]
 
-                action items_dict = {}
+                action_items_dict = {}
                 parent_task = None
 
                 for item in action_items_list:
                     if item.startswith("    "):
                         if parent_task:
-                            action items_dict[parent_task].append(item.strip())
+                            action_items_dict[parent_task].append(item.strip())
                     else:
                         parent_task = item.strip()
-                        action items_dict[parent_task] = []
+                        action_items_dict[parent_task] = []
 
                 grid_data = []
-                for idx, (parent, children) in enumerate(action items_dict.items(), 1):
+                for idx, (parent, children) in enumerate(action_items_dict.items(), 1):
                     grid_data.append({
                         "Task Number": idx,
                         "Task": parent,
@@ -274,7 +274,7 @@ def main():
                 gb.configure_default_column(editable=True, resizable=True)
                 grid_options = gb.build()
 
-                grid_response = AgGrid(grid_df, gridOptions=grid_options, height=300, fit_columns_on_grid_load=True, update_mode=GridUpdateMode.MODEL_CHANGED)
+                grid_response = AgGrid(grid_df, gridOptions=grid_options, height=300, fit_columns on_grid_load=True, update_mode=GridUpdateMode.MODEL_CHANGED)
 
                 if isinstance(grid_response['data'], pd.DataFrame):
                     for index, row in grid_response['data'].iterrows():
@@ -288,27 +288,43 @@ def main():
                             st.session_state[f"memo_prompt_{row['Task Number']}"] = f"Draft a memo for the following action item: {row['Task']}"
                             row["Draft Memo"] = False
 
+                # Add generated tasks to prompts
                 for key in st.session_state.keys():
                     if key.startswith("email_prompt_"):
                         task_num = key.split('_')[-1]
                         st.subheader(f"Email Draft for Task {task_num}")
                         st.write(st.session_state[key])
+                        prompt_info = {
+                            "prompt": st.session_state[key],
+                            "model": "gpt-4o",
+                            "heading": f"Email Draft for Task {task_num}"
+                        }
                         if st.button(f"Generate Email for Task {task_num}"):
-                            draft = openai_client.generate_response(st.session_state.transcription, "gpt-4o", st.session_state[key])
+                            draft = openai_client.generate_response(st.session_state.transcription, prompt_info["model"], prompt_info["prompt"])
                             st.write(draft)
                     elif key.startswith("slack_prompt_"):
                         task_num = key.split('_')[-1]
                         st.subheader(f"Slack Draft for Task {task_num}")
                         st.write(st.session_state[key])
+                        prompt_info = {
+                            "prompt": st.session_state[key],
+                            "model": "gpt-4o",
+                            "heading": f"Slack Draft for Task {task_num}"
+                        }
                         if st.button(f"Generate Slack for Task {task_num}"):
-                            draft = openai_client.generate_response(st.session_state.transcription, "gpt-4o", st.session_state[key])
+                            draft = openai_client.generate_response(st.session_state.transcription, prompt_info["model"], prompt_info["prompt"])
                             st.write(draft)
                     elif key.startswith("memo_prompt_"):
                         task_num = key.split('_')[-1]
                         st.subheader(f"Memo Draft for Task {task_num}")
                         st.write(st.session_state[key])
+                        prompt_info = {
+                            "prompt": st.session_state[key],
+                            "model": "gpt-4o",
+                            "heading": f"Memo Draft for Task {task_num}"
+                        }
                         if st.button(f"Generate Memo for Task {task_num}"):
-                            draft = openai_client.generate_response(st.session_state.transcription, "gpt-4o", st.session_state[key])
+                            draft = openai_client.generate_response(st.session_state.transcription, prompt_info["model"], prompt_info["prompt"])
                             st.write(draft)
 
 if __name__ == "__main__":
