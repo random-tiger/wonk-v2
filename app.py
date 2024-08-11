@@ -99,11 +99,20 @@ def main():
                 st.session_state.editor_content = editor_content
 
         st.sidebar.info("Select what you'd like to create!")
+        
+        # Clear the prompts if a new summary type is selected
+        if 'selected_summary_type' not in st.session_state:
+            st.session_state.selected_summary_type = ""
+        
         summary_type = st.sidebar.radio(
             "Select the type of summary you want to generate:",
             ("", "Meeting Summary", "User Research Synthesis", "Action Items", "Retro", "Document Review"),
             index=0
         )
+        
+        if summary_type != st.session_state.selected_summary_type:
+            st.session_state.selected_summary_type = summary_type
+            st.session_state.prompts = []
 
         if 'prompts' not in st.session_state:
             st.session_state.prompts = []
