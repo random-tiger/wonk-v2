@@ -1,5 +1,5 @@
 import streamlit as st
-import os
+import tempfile
 from file_handlers import (
     convert_video_to_mp3,
     read_docx,
@@ -9,22 +9,24 @@ from file_handlers import (
     read_pptx,
     encode_image,
     process_files_concurrently,
-    trim_silence  # Ensure this is imported
+    trim_silence
 )
 from openai_client import OpenAIClient
 from pre_canned_prompts import pre_canned_prompts
 from io import BytesIO
 from PIL import Image
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-from streamlit_quill import st_quill  # Make sure this import is correct
+from streamlit_quill import st_quill
 import pandas as pd
 from docx import Document
 import time
 
-#api_key = st.secrets["OPENAI_API_KEY"]
-
 # Initialize OpenAI client
-openai_client = OpenAIClient()
+try:
+    openai_client = OpenAIClient()
+except ValueError as e:
+    st.error(f"Error initializing OpenAI client: {e}")
+    st.stop()
 
 # Function to save meeting minutes as a Word document
 def save_as_docx(minutes):
@@ -41,7 +43,6 @@ def save_as_docx(minutes):
 
 def process_files(uploaded_files, openai_client):
     with st.spinner("Processing files..."):
-        # No need to call trim_silence here as it's already handled in file_handlers.py
         return process_files_concurrently(uploaded_files, openai_client)
 
 def main():
@@ -69,6 +70,8 @@ def main():
     uploaded_files = st.sidebar.file_uploader("Upload audio, video, text, or image files", type=["mp3", "mp4", "mov", "docx", "txt", "xlsx", "pdf", "pptx", "jpg", "jpeg", "png"], accept_multiple_files=True)
     process_files_button = st.sidebar.button("Process Files")
 
+    st.write("Max Upload Size:", st.config.get_option("server.maxUploadSize"))
+
     if uploaded_files is not None and process_files_button:
         if "transcriptions" not in st.session_state:
             st.session_state.transcriptions = []
@@ -80,12 +83,22 @@ def main():
             combined_transcription = "\n\n".join(st.session_state.transcriptions)
             st.session_state.transcription = combined_transcription
 
-    if "transcription" in st.session_state:
-        transcription = st.session_state.transcription
+    if "transcription" not in st.session_state:
+        st.session_state.transcription = ""
+
+    if "editor_content" not in st.session_state:
+        st.session_state.editor_content = ""
+
+    transcription = st.session_state.transcription
+    editor_content = st.session_state.editor_content
+
+    if transcription:
         with st.expander("Transcription", expanded=True):
             st.subheader("Transcription")
-            edited_transcription = st_quill(value=transcription, key='transcription_editor')
-            st.session_state.transcription = edited_transcription
+            editor_content = st_quill(value=transcription, key='transcription_editor')
+
+            if editor_content != st.session_state.editor_content:
+                st.session_state.editor_content = editor_content
 
         st.sidebar.info("Select what you'd like to create!")
         summary_type = st.sidebar.radio(
