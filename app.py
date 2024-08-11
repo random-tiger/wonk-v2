@@ -70,8 +70,6 @@ def main():
     uploaded_files = st.sidebar.file_uploader("Upload audio, video, text, or image files", type=["mp3", "mp4", "mov", "docx", "txt", "xlsx", "pdf", "pptx", "jpg", "jpeg", "png"], accept_multiple_files=True)
     process_files_button = st.sidebar.button("Process Files")
 
-    st.write("Max Upload Size:", st.config.get_option("server.maxUploadSize"))
-
     if uploaded_files is not None and process_files_button:
         if "transcriptions" not in st.session_state:
             st.session_state.transcriptions = []
