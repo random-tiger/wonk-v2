@@ -76,6 +76,7 @@ def main():
 
         transcriptions = process_files(uploaded_files, openai_client)
         st.session_state.transcriptions.extend(transcriptions)
+        st.info(f"Transcriptions: {transcriptions}")
 
         if st.session_state.transcriptions:
             combined_transcription = "\n\n".join(st.session_state.transcriptions)
