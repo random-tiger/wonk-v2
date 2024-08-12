@@ -39,6 +39,8 @@ def convert_video_to_mp3(uploaded_file, suffix):
         st.error(f"Error converting video to audio: {e}")
         return None
 
+# Other existing functions remain unchanged
+
 def read_docx(file, openai_client):
     doc = docx.Document(file)
     text = "\n".join([para.text for para in doc.paragraphs])
@@ -52,6 +54,8 @@ def read_docx(file, openai_client):
 
     image_texts = process_images_concurrently(images, openai_client, "DOCX")
     return text + "\n" + "\n".join(image_texts)
+
+# Other existing functions remain unchanged
 
 def read_txt(file):
     return file.read().decode("utf-8")
@@ -158,15 +162,12 @@ def transcribe_image(openai_client, image_stream):
         response.raise_for_status()
     return response.json()['choices'][0]['message']['content']
 
-def trim_silence(audio_file, file_name, silence_len=1000, silence_thresh=-40):
+def trim_silence(audio_file, file_name):
     sound = AudioSegment.from_file(audio_file, format="mp3")
-    nonsilent_ranges = detect_nonsilent(sound, min_silence_len=silence_len, silence_thresh=silence_thresh)
-    
+    nonsilent_ranges = detect_nonsilent(sound, min_silence_len=1000, silence_thresh=sound.dBFS-16)
     if nonsilent_ranges:
-        start_trim = nonsilent_ranges[0][0]
-        end_trim = nonsilent_ranges[-1][1]
-        trimmed_sound = sound[start_trim:end_trim]
-        
+        start_trim, end_trim = nonsilent_ranges[0]
+        trimmed_sound = sound[start_trim:]
         trimmed_audio_file = BytesIO()
         trimmed_sound.export(trimmed_audio_file, format="mp3")
         trimmed_audio_file.name = file_name  # Set the name attribute for the BytesIO object
