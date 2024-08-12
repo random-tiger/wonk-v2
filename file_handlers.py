@@ -1,7 +1,12 @@
 import tempfile
 import moviepy.editor as mp
-from io import BytesIO
+import docx
+import pandas as pd
+import fitz
+from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from PIL import Image
+from io import BytesIO
 import base64
 import os
 import requests
