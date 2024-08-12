@@ -42,7 +42,6 @@ def convert_video_to_mp3(uploaded_file, suffix):
         audio_file_path = audio_file.name
         video.audio.write_audiofile(audio_file_path)
         logging.info(f"MP3 file created: {audio_file_path}")
-        st.info(f"MP3 file created: {audio_file_path}")  # For user feedback
         
     return audio_file_path
 
@@ -75,7 +74,7 @@ def read_pdf(file, openai_client):
     for page_num in range(len(document)):
         page = document.load_page(page_num)
         text += page.get_text()
-        image_list = page.get_images(full=True)
+        image_list = page.get_images(full(True))
         for image_index, img in enumerate(page.get_images(full(True))):
             xref = img[0]
             base_image = document.extract_image(xref)
@@ -183,7 +182,6 @@ def process_files_concurrently(uploaded_files, openai_client):
     with ThreadPoolExecutor() as executor:
         futures = []
         for i, uploaded_file in enumerate(uploaded_files):
-            st.info(f"Submitting file {i+1}/{len(uploaded_files)}: {getattr(uploaded_file, 'name', 'unknown')} for processing")
             logging.info(f"Submitting file {i+1}/{len(uploaded_files)}: {getattr(uploaded_file, 'name', 'unknown')} for processing")
             if uploaded_file.type in ["video/quicktime", "video/mp4"]:
                 suffix = ".mov" if uploaded_file.type == "video/quicktime" else ".mp4"
@@ -209,10 +207,8 @@ def process_files_concurrently(uploaded_files, openai_client):
             try:
                 result = future.result()
                 transcriptions.append(result)
-                st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
                 logging.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
             except Exception as e:
-                st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
                 logging.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
     return transcriptions
