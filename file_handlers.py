@@ -35,14 +35,12 @@ def convert_video_to_mp3(uploaded_file, suffix):
     video = mp.VideoFileClip(temp_video_file_path)
 
     if video.audio is None:
-        st.error("No audio track found in the video.")
         logging.error("No audio track found in the video.")
         return None
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
         audio_file_path = audio_file.name
         video.audio.write_audiofile(audio_file_path)
-        st.info(f"MP3 file created: {audio_file_path}")
         logging.info(f"MP3 file created: {audio_file_path}")
         
     return audio_file_path
@@ -114,11 +112,9 @@ def process_images_concurrently(images, openai_client, context):
         for i, future in enumerate(as_completed(futures)):
             try:
                 image_text = future.result()
-                st.info(f"Processed image {i+1}/{len(images)} from {context}")
                 logging.info(f"Processed image {i+1}/{len(images)} from {context}")
                 image_texts.append(image_text)
             except Exception as e:
-                st.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
                 logging.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
     return image_texts
 
@@ -164,7 +160,6 @@ def transcribe_image(openai_client, image_stream):
 
     response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
     if response.status_code != 200:
-        st.error(f"Error: {response.status_code} - {response.text}")
         logging.error(f"Error: {response.status_code} - {response.text}")
         response.raise_for_status()
     return response.json()['choices'][0]['message']['content']
@@ -213,10 +208,8 @@ def process_files_concurrently(uploaded_files, openai_client):
             try:
                 result = future.result()
                 transcriptions.append(result)
-                st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
                 logging.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
             except Exception as e:
-                st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
                 logging.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
     return transcriptions
