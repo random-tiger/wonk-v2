@@ -16,9 +16,6 @@ from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 import time
 
-# Explicitly set the path to ffmpeg if necessary
-# AudioSegment.ffmpeg = "/usr/bin/ffmpeg"  # Example path
-
 def convert_video_to_mp3(uploaded_file, suffix):
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
         temp_video_file.write(uploaded_file.getbuffer())
