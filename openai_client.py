@@ -1,6 +1,7 @@
 import os
 import requests
-from openai import OpenAI
+import openai
+import streamlit as st
 import time
 
 class OpenAIClient:
