@@ -138,9 +138,9 @@ def transcribe_image(openai_client, image_stream):
                         "image_url": {
                             "url": f"data:image/jpeg;base64,{base64_image}"
                         }
-                    ]
-                }
-            ]
+                    }
+                ]
+            }
         ],
         "max_tokens": 300
     }
@@ -172,7 +172,9 @@ def process_files_concurrently(uploaded_files, openai_client):
             st.info(f"Submitting file {i+1}/{len(uploaded_files)}: {getattr(uploaded_file, 'name', 'unknown')} for processing")
             if uploaded_file.type in ["video/quicktime", "video/mp4"]:
                 suffix = ".mov" if uploaded_file.type == "video/quicktime" else ".mp4"
-                futures.append(executor.submit(convert_video_to_mp3, uploaded_file, suffix))
+                audio_file_path = convert_video_to_mp3(uploaded_file, suffix)
+                trimmed_audio_file = trim_silence(audio_file_path, uploaded_file.name)
+                futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
             elif uploaded_file.type == "audio/mpeg":
                 trimmed_audio_file = trim_silence(uploaded_file, uploaded_file.name)
                 futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
