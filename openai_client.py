@@ -1,7 +1,6 @@
 import os
 import requests
 from openai import OpenAI
-import streamlit as st
 import time
 
 class OpenAIClient:
@@ -10,19 +9,21 @@ class OpenAIClient:
             self.api_key = st.secrets["openai"]["api_key"]
         except KeyError as e:
             raise ValueError("OPENAI_API_KEY not found in Streamlit secrets") from e
-        
+
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not set in Streamlit secrets")
-        self.client = OpenAI(api_key=self.api_key)
+
+        openai.api_key = self.api_key
+        self.client = openai
 
     def transcribe_audio(self, audio_file):
         # Add a short delay before transcription
         time.sleep(1)
-        response = self.client.Audio.transcriptions.create(model="whisper-1", file=audio_file)
-        return response['text'] if isinstance(response, dict) else response.text
+        transcription = self.client.audio.transcriptions.create(model="whisper-1", file=audio_file)
+        return transcription['text'] if isinstance(transcription, dict) else transcription.text
 
     def generate_response(self, transcription, model, custom_prompt):
-        response = self.client.Chat.completions.create(
+        response = self.client.chat.completions.create(
             model=model,
             temperature=0,
             messages=[
@@ -30,7 +31,7 @@ class OpenAIClient:
                 {"role": "user", "content": transcription}
             ]
         )
-        return response['choices'][0]['message']['content'] if 'choices' in response else response.choices[0].message.content
+        return response.choices[0].message.content
 
     def transcribe_image(self, base64_image):
         headers = {
@@ -61,6 +62,4 @@ class OpenAIClient:
         }
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-        if response.status_code != 200:
-            raise Exception(f"Error: {response.status_code} - {response.text}")
         return response.json()['choices'][0]['message']['content']
