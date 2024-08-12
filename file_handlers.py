@@ -1,12 +1,7 @@
 import tempfile
 import moviepy.editor as mp
-import docx
-import pandas as pd
-import fitz
-from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE_TYPE
-from PIL import Image
 from io import BytesIO
+from PIL import Image
 import base64
 import os
 import requests
@@ -17,20 +12,29 @@ from pydub.silence import detect_nonsilent
 import time
 
 def convert_video_to_mp3(uploaded_file, suffix):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
-        temp_video_file.write(uploaded_file.getbuffer())
-        temp_video_file_path = temp_video_file.name
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
+            temp_video_file.write(uploaded_file.getbuffer())
+            temp_video_file_path = temp_video_file.name
 
-    video = mp.VideoFileClip(temp_video_file_path)
+        video = mp.VideoFileClip(temp_video_file_path)
 
-    if video.audio is None:
+        if video.audio is None:
+            st.error("No audio track found in the video file.")
+            return None
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+            audio_file_path = audio_file.name
+
+        # Using ffmpeg directly for conversion to avoid potential issues
+        video.audio.write_audiofile(audio_file_path, codec='mp3')
+
+        return audio_file_path
+    except Exception as e:
+        st.error(f"Error converting video to audio: {e}")
         return None
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
-        audio_file_path = audio_file.name
-
-    video.audio.write_audiofile(audio_file_path)
-    return audio_file_path
+# Other existing functions remain unchanged
 
 def read_docx(file, openai_client):
     doc = docx.Document(file)
@@ -45,6 +49,8 @@ def read_docx(file, openai_client):
 
     image_texts = process_images_concurrently(images, openai_client, "DOCX")
     return text + "\n" + "\n".join(image_texts)
+
+# Other existing functions remain unchanged
 
 def read_txt(file):
     return file.read().decode("utf-8")
@@ -173,8 +179,9 @@ def process_files_concurrently(uploaded_files, openai_client):
             if uploaded_file.type in ["video/quicktime", "video/mp4"]:
                 suffix = ".mov" if uploaded_file.type == "video/quicktime" else ".mp4"
                 audio_file_path = convert_video_to_mp3(uploaded_file, suffix)
-                trimmed_audio_file = trim_silence(audio_file_path, uploaded_file.name)
-                futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
+                if audio_file_path:
+                    trimmed_audio_file = trim_silence(audio_file_path, uploaded_file.name)
+                    futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
             elif uploaded_file.type == "audio/mpeg":
                 trimmed_audio_file = trim_silence(uploaded_file, uploaded_file.name)
                 futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
