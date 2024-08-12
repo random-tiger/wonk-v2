@@ -25,7 +25,7 @@ import logging
 logging.basicConfig(
     filename='debug.log',
     level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s %(message)s',
+    format='%(asctime)s %(levellevelname level=%(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
