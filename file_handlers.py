@@ -15,9 +15,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 import time
+import logging
 
 # Explicitly set the path to ffmpeg if necessary
 # AudioSegment.ffmpeg = "/usr/bin/ffmpeg"  # Example path
+
+logging.basicConfig(
+    filename='debug.log',
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 def convert_video_to_mp3(uploaded_file, suffix):
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
@@ -28,12 +36,14 @@ def convert_video_to_mp3(uploaded_file, suffix):
 
     if video.audio is None:
         st.error("No audio track found in the video.")
+        logging.error("No audio track found in the video.")
         return None
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
         audio_file_path = audio_file.name
         video.audio.write_audiofile(audio_file_path)
         st.info(f"MP3 file created: {audio_file_path}")
+        logging.info(f"MP3 file created: {audio_file_path}")
         
     return audio_file_path
 
@@ -67,7 +77,7 @@ def read_pdf(file, openai_client):
         page = document.load_page(page_num)
         text += page.get_text()
         image_list = page.get_images(full=True)
-        for image_index, img in enumerate(page.get_images(full=True)):
+        for image_index, img in enumerate(page.get_images(full(True))):
             xref = img[0]
             base_image = document.extract_image(xref)
             image_bytes = base_image["image"]
@@ -105,9 +115,11 @@ def process_images_concurrently(images, openai_client, context):
             try:
                 image_text = future.result()
                 st.info(f"Processed image {i+1}/{len(images)} from {context}")
+                logging.info(f"Processed image {i+1}/{len(images)} from {context}")
                 image_texts.append(image_text)
             except Exception as e:
                 st.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
+                logging.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
     return image_texts
 
 def encode_image(image):
@@ -153,6 +165,7 @@ def transcribe_image(openai_client, image_stream):
     response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
     if response.status_code != 200:
         st.error(f"Error: {response.status_code} - {response.text}")
+        logging.error(f"Error: {response.status_code} - {response.text}")
         response.raise_for_status()
     return response.json()['choices'][0]['message']['content']
 
@@ -175,6 +188,7 @@ def process_files_concurrently(uploaded_files, openai_client):
         futures = []
         for i, uploaded_file in enumerate(uploaded_files):
             st.info(f"Submitting file {i+1}/{len(uploaded_files)}: {getattr(uploaded_file, 'name', 'unknown')} for processing")
+            logging.info(f"Submitting file {i+1}/{len(uploaded_files)}: {getattr(uploaded_file, 'name', 'unknown')} for processing")
             if uploaded_file.type in ["video/quicktime", "video/mp4"]:
                 suffix = ".mov" if uploaded_file.type == "video/quicktime" else ".mp4"
                 futures.append(executor.submit(convert_video_to_mp3, uploaded_file, suffix))
@@ -200,7 +214,9 @@ def process_files_concurrently(uploaded_files, openai_client):
                 result = future.result()
                 transcriptions.append(result)
                 st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
+                logging.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
             except Exception as e:
                 st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
+                logging.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
     return transcriptions
