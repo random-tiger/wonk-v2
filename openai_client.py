@@ -3,6 +3,14 @@ import requests
 from openai import OpenAI
 import streamlit as st
 import time
+import logging
+
+logging.basicConfig(
+    filename='debug.log',
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 class OpenAIClient:
     def __init__(self):
@@ -20,6 +28,7 @@ class OpenAIClient:
         time.sleep(1)
         response = self.client.Audio.transcriptions.create(model="whisper-1", file=audio_file)
         st.info(f"Transcription response: {response}")
+        logging.info(f"Transcription response: {response}")
         return response['text'] if isinstance(response, dict) else response.text
 
     def generate_response(self, transcription, model, custom_prompt):
@@ -64,5 +73,6 @@ class OpenAIClient:
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
         if response.status_code != 200:
             st.error(f"Error: {response.status_code} - {response.text}")
+            logging.error(f"Error: {response.status_code} - {response.text}")
             response.raise_for_status()
         return response.json()['choices'][0]['message']['content']
