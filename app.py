@@ -70,9 +70,7 @@ def main():
     uploaded_files = st.sidebar.file_uploader("Upload audio, video, text, or image files", type=["mp3", "mp4", "mov", "docx", "txt", "xlsx", "pdf", "pptx", "jpg", "jpeg", "png"], accept_multiple_files=True)
     process_files_button = st.sidebar.button("Process Files")
 
-    st.write("Max Upload Size:", st.config.get_option("server.maxUploadSize"))
-
-    if uploaded_files is not None and process_files_button:
+    if uploaded_files and process_files_button:
         if "transcriptions" not in st.session_state:
             st.session_state.transcriptions = []
 
@@ -297,7 +295,6 @@ def main():
                         st.write(st.session_state[key])
                         if st.button(f"Generate Memo for Task {task_num}"):
                             draft = openai_client.generate_response(st.session_state.transcription, "gpt-4o", st.session_state[key])
-                            st.write(draft)
 
 if __name__ == "__main__":
     main()
