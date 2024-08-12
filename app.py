@@ -20,12 +20,21 @@ from streamlit_quill import st_quill
 import pandas as pd
 from docx import Document
 import time
+import logging
+
+logging.basicConfig(
+    filename='debug.log',
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 # Initialize OpenAI client
 try:
     openai_client = OpenAIClient()
 except ValueError as e:
     st.error(f"Error initializing OpenAI client: {e}")
+    logging.error(f"Error initializing OpenAI client: {e}")
     st.stop()
 
 # Function to save meeting minutes as a Word document
@@ -77,6 +86,7 @@ def main():
         transcriptions = process_files(uploaded_files, openai_client)
         st.session_state.transcriptions.extend(transcriptions)
         st.info(f"Transcriptions: {transcriptions}")
+        logging.info(f"Transcriptions: {transcriptions}")
 
         if st.session_state.transcriptions:
             combined_transcription = "\n\n".join(st.session_state.transcriptions)
@@ -185,6 +195,7 @@ def main():
                             })
                         except KeyError as e:
                             st.error(f"KeyError: {e} - summary_type: {summary_type.lower().replace(' ', '_')}, key: {key}")
+                            logging.error(f"KeyError: {e} - summary_type: {summary_type.lower().replace(' ', '_')}, key: {key}")
                             st.stop()
 
         for i, prompt_info in enumerate(st.session_state.prompts):
