@@ -26,9 +26,13 @@ class OpenAIClient:
     def transcribe_audio(self, audio_file):
         # Add a short delay before transcription
         time.sleep(1)
+        logging.info(f"Transcribing audio file: {audio_file.name}")
         response = self.client.Audio.transcriptions.create(model="whisper-1", file=audio_file)
         logging.info(f"Transcription response: {response}")
-        return response['text'] if isinstance(response, dict) else response.text
+        if 'text' in response:
+            return response['text']
+        else:
+            return response.text
 
     def generate_response(self, transcription, model, custom_prompt):
         response = self.client.Chat.completions.create(
