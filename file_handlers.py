@@ -42,6 +42,7 @@ def convert_video_to_mp3(uploaded_file, suffix):
         audio_file_path = audio_file.name
         video.audio.write_audiofile(audio_file_path)
         logging.info(f"MP3 file created: {audio_file_path}")
+        st.info(f"MP3 file created: {audio_file_path}")  # For user feedback
         
     return audio_file_path
 
@@ -208,8 +209,10 @@ def process_files_concurrently(uploaded_files, openai_client):
             try:
                 result = future.result()
                 transcriptions.append(result)
+                st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
                 logging.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
             except Exception as e:
+                st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
                 logging.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
     return transcriptions
