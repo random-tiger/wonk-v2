@@ -20,21 +20,12 @@ from streamlit_quill import st_quill
 import pandas as pd
 from docx import Document
 import time
-import logging
-
-logging.basicConfig(
-    filename='debug.log',
-    level=logging.DEBUG,
-    format='%(asctime)s %(levellevelname level=%(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
 
 # Initialize OpenAI client
 try:
     openai_client = OpenAIClient()
 except ValueError as e:
     st.error(f"Error initializing OpenAI client: {e}")
-    logging.error(f"Error initializing OpenAI client: {e}")
     st.stop()
 
 # Function to save meeting minutes as a Word document
@@ -79,14 +70,14 @@ def main():
     uploaded_files = st.sidebar.file_uploader("Upload audio, video, text, or image files", type=["mp3", "mp4", "mov", "docx", "txt", "xlsx", "pdf", "pptx", "jpg", "jpeg", "png"], accept_multiple_files=True)
     process_files_button = st.sidebar.button("Process Files")
 
+    st.write("Max Upload Size:", st.config.get_option("server.maxUploadSize"))
+
     if uploaded_files is not None and process_files_button:
         if "transcriptions" not in st.session_state:
             st.session_state.transcriptions = []
 
         transcriptions = process_files(uploaded_files, openai_client)
         st.session_state.transcriptions.extend(transcriptions)
-        st.info(f"Transcriptions: {transcriptions}")
-        logging.info(f"Transcriptions: {transcriptions}")
 
         if st.session_state.transcriptions:
             combined_transcription = "\n\n".join(st.session_state.transcriptions)
@@ -104,31 +95,17 @@ def main():
     if transcription:
         with st.expander("Transcription", expanded=True):
             st.subheader("Transcription")
-
-            if editor_content != transcription:
-                editor_content = transcription
-                st.session_state.editor_content = editor_content
-
-            editor_content = st_quill(value=editor_content, key='transcription_editor')
+            editor_content = st_quill(value=transcription, key='transcription_editor')
 
             if editor_content != st.session_state.editor_content:
                 st.session_state.editor_content = editor_content
 
         st.sidebar.info("Select what you'd like to create!")
-        
-        # Clear the prompts if a new summary type is selected
-        if 'selected_summary_type' not in st.session_state:
-            st.session_state.selected_summary_type = ""
-        
         summary_type = st.sidebar.radio(
             "Select the type of summary you want to generate:",
             ("", "Meeting Summary", "User Research Synthesis", "Action Items", "Retro", "Document Review"),
             index=0
         )
-        
-        if summary_type != st.session_state.selected_summary_type:
-            st.session_state.selected_summary_type = summary_type
-            st.session_state.prompts = []
 
         if 'prompts' not in st.session_state:
             st.session_state.prompts = []
@@ -195,7 +172,6 @@ def main():
                             })
                         except KeyError as e:
                             st.error(f"KeyError: {e} - summary_type: {summary_type.lower().replace(' ', '_')}, key: {key}")
-                            logging.error(f"KeyError: {e} - summary_type: {summary_type.lower().replace(' ', '_')}, key: {key}")
                             st.stop()
 
         for i, prompt_info in enumerate(st.session_state.prompts):
@@ -300,43 +276,27 @@ def main():
                             st.session_state[f"memo_prompt_{row['Task Number']}"] = f"Draft a memo for the following action item: {row['Task']}"
                             row["Draft Memo"] = False
 
-                # Add generated tasks to prompts
                 for key in st.session_state.keys():
                     if key.startswith("email_prompt_"):
                         task_num = key.split('_')[-1]
                         st.subheader(f"Email Draft for Task {task_num}")
                         st.write(st.session_state[key])
-                        prompt_info = {
-                            "prompt": st.session_state[key],
-                            "model": "gpt-4o",
-                            "heading": f"Email Draft for Task {task_num}"
-                        }
                         if st.button(f"Generate Email for Task {task_num}"):
-                            draft = openai_client.generate_response(st.session_state.transcription, prompt_info["model"], prompt_info["prompt"])
+                            draft = openai_client.generate_response(st.session_state.transcription, "gpt-4o", st.session_state[key])
                             st.write(draft)
                     elif key.startswith("slack_prompt_"):
                         task_num = key.split('_')[-1]
                         st.subheader(f"Slack Draft for Task {task_num}")
                         st.write(st.session_state[key])
-                        prompt_info = {
-                            "prompt": st.session_state[key],
-                            "model": "gpt-4o",
-                            "heading": f"Slack Draft for Task {task_num}"
-                        }
                         if st.button(f"Generate Slack for Task {task_num}"):
-                            draft = openai_client.generate_response(st.session_state.transcription, prompt_info["model"], prompt_info["prompt"])
+                            draft = openai_client.generate_response(st.session_state.transcription, "gpt-4o", st.session_state[key])
                             st.write(draft)
                     elif key.startswith("memo_prompt_"):
                         task_num = key.split('_')[-1]
                         st.subheader(f"Memo Draft for Task {task_num}")
                         st.write(st.session_state[key])
-                        prompt_info = {
-                            "prompt": st.session_state[key],
-                            "model": "gpt-4o",
-                            "heading": f"Memo Draft for Task {task_num}"
-                        }
                         if st.button(f"Generate Memo for Task {task_num}"):
-                            draft = openai_client.generate_response(st.session_state.transcription, prompt_info["model"], prompt_info["prompt"])
+                            draft = openai_client.generate_response(st.session_state.transcription, "gpt-4o", st.session_state[key])
                             st.write(draft)
 
 if __name__ == "__main__":
