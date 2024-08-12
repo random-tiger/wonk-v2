@@ -1,6 +1,6 @@
 import os
 import requests
-import openai
+from openai import OpenAI
 import streamlit as st
 import time
 
@@ -13,16 +13,16 @@ class OpenAIClient:
         
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not set in Streamlit secrets")
-        openai.api_key = self.api_key
+        self.client = OpenAI(api_key=self.api_key)
 
     def transcribe_audio(self, audio_file):
         # Add a short delay before transcription
         time.sleep(1)
-        response = openai.Audio.transcriptions.create(model="whisper-1", file=audio_file)
+        response = self.client.Audio.transcriptions.create(model="whisper-1", file=audio_file)
         return response['text'] if isinstance(response, dict) else response.text
 
     def generate_response(self, transcription, model, custom_prompt):
-        response = openai.Chat.completions.create(
+        response = self.client.Chat.completions.create(
             model=model,
             temperature=0,
             messages=[
