@@ -16,7 +16,9 @@ from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 import time
 
-# Convert video to mp3
+# Explicitly set the path to ffmpeg if necessary
+# AudioSegment.ffmpeg = "/usr/bin/ffmpeg"  # Example path
+
 def convert_video_to_mp3(uploaded_file, suffix):
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
         temp_video_file.write(uploaded_file.getbuffer())
@@ -25,15 +27,16 @@ def convert_video_to_mp3(uploaded_file, suffix):
     video = mp.VideoFileClip(temp_video_file_path)
 
     if video.audio is None:
+        st.error("No audio track found in the video.")
         return None
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
         audio_file_path = audio_file.name
-
-    video.audio.write_audiofile(audio_file_path)
+        video.audio.write_audiofile(audio_file_path)
+        st.info(f"MP3 file created: {audio_file_path}")
+        
     return audio_file_path
 
-# Read DOCX file
 def read_docx(file, openai_client):
     doc = docx.Document(file)
     text = "\n".join([para.text for para in doc.paragraphs])
@@ -48,16 +51,13 @@ def read_docx(file, openai_client):
     image_texts = process_images_concurrently(images, openai_client, "DOCX")
     return text + "\n" + "\n".join(image_texts)
 
-# Read TXT file
 def read_txt(file):
     return file.read().decode("utf-8")
 
-# Read Excel file
 def read_excel(file):
     df = pd.read_excel(file)
     return df.to_string(index=False)
 
-# Read PDF file
 def read_pdf(file, openai_client):
     document = fitz.open(stream=file.read(), filetype="pdf")
     text = ""
@@ -77,7 +77,6 @@ def read_pdf(file, openai_client):
     image_texts = process_images_concurrently(images, openai_client, "PDF")
     return text + "\n" + "\n".join(image_texts)
 
-# Read PPTX file
 def read_pptx(file, openai_client):
     presentation = Presentation(file)
     slides = []
@@ -98,7 +97,6 @@ def read_pptx(file, openai_client):
 
     return "\n".join(slides)
 
-# Process images concurrently
 def process_images_concurrently(images, openai_client, context):
     image_texts = []
     with ThreadPoolExecutor() as executor:
@@ -112,13 +110,11 @@ def process_images_concurrently(images, openai_client, context):
                 st.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
     return image_texts
 
-# Encode image to base64
 def encode_image(image):
     with BytesIO() as buffer:
         image.save(buffer, format=image.format)
         return base64.b64encode(buffer.getvalue()).decode()
 
-# Transcribe image using OpenAI
 def transcribe_image(openai_client, image_stream):
     api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
@@ -160,7 +156,6 @@ def transcribe_image(openai_client, image_stream):
         response.raise_for_status()
     return response.json()['choices'][0]['message']['content']
 
-# Trim silence from audio file
 def trim_silence(audio_file, file_name):
     sound = AudioSegment.from_file(audio_file, format="mp3")
     nonsilent_ranges = detect_nonsilent(sound, min_silence_len=1000, silence_thresh=sound.dBFS-16)
@@ -174,7 +169,6 @@ def trim_silence(audio_file, file_name):
         return trimmed_audio_file
     return audio_file
 
-# Process files concurrently
 def process_files_concurrently(uploaded_files, openai_client):
     transcriptions = []
     with ThreadPoolExecutor() as executor:
@@ -210,19 +204,3 @@ def process_files_concurrently(uploaded_files, openai_client):
                 st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
     return transcriptions
-
-# Main function to run the Streamlit app
-def main():
-    st.title("File Processor")
-    st.sidebar.title("Upload your files")
-    uploaded_files = st.sidebar.file_uploader("Choose files", accept_multiple_files=True)
-
-    if st.sidebar.button("Process Files"):
-        if uploaded_files:
-            st.session_state['transcriptions'] = process_files_concurrently(uploaded_files, openai_client)
-
-        if 'transcriptions' in st.session_state:
-            st.write(st.session_state['transcriptions'])
-
-if __name__ == "__main__":
-    main()
