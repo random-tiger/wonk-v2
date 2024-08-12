@@ -141,7 +141,7 @@ def transcribe_image(openai_client, image_stream):
                         "image_url": {
                             "url": f"data:image/jpeg;base64,{base64_image}"
                         }
-                    }
+                    ]
                 ]
             }
         ],
@@ -196,7 +196,10 @@ def process_files_concurrently(uploaded_files, openai_client):
         for i, future in enumerate(as_completed(futures)):
             try:
                 result = future.result()
-                transcriptions.append(result)
+                if isinstance(result, str):
+                    transcriptions.append(result)
+                elif isinstance(result, list):
+                    transcriptions.extend(result)
                 st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
             except Exception as e:
                 st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
