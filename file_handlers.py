@@ -125,7 +125,7 @@ def process_images_concurrently(images, openai_client, context):
 
     return image_texts
 
-def transcribe_image(self, base64_image):
+def transcribe_image(openai_client, image_stream):
     try:
         headers = {
             "Content-Type": "application/json",
