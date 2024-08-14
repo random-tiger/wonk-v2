@@ -51,6 +51,8 @@ def convert_video_to_mp3(uploaded_file, suffix):
 
 def process_images_concurrently(images, openai_client, context):
     image_texts = []
+    error_messages = []  # Collect errors to display later
+
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {}
         for image in images:
@@ -59,14 +61,19 @@ def process_images_concurrently(images, openai_client, context):
                 base64_image = encode_image(img)  # Encode the image
                 futures[executor.submit(openai_client.transcribe_image, base64_image)] = image
             except Exception as e:
-                st.error(f"Error opening image for {context}: {e}")
+                error_messages.append(f"Error opening image for {context}: {e}")
 
         for i, future in enumerate(as_completed(futures)):
             try:
                 image_text = future.result()
                 image_texts.append(f"Image {i+1}: {image_text}")
             except Exception as e:
-                st.error(f"Error processing an image from {context}: {e}")
+                error_messages.append(f"Error processing an image from {context}: {e}")
+
+    # Now handle UI updates on the main thread
+    if error_messages:
+        for error in error_messages:
+            st.error(error)  # Display errors on the main thread
 
     return image_texts
 
