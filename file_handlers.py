@@ -94,16 +94,18 @@ def read_pptx(file, openai_client):
 
 def process_images_concurrently(images, openai_client, context):
     image_texts = []
+    errors = []
     with ThreadPoolExecutor() as executor:
         futures = {executor.submit(transcribe_image, openai_client, image_stream): image_stream for image_stream in images}
         for i, future in enumerate(as_completed(futures)):
             try:
                 image_text = future.result()
-                st.info(f"Processed image {i+1}/{len(images)} from {context}")
-                image_texts.append(image_text)
+                if image_text:  # Ensure the result is not None
+                    image_texts.append(f"Processed image {i+1}/{len(images)} from {context}")
+                    image_texts.append(image_text)
             except Exception as e:
-                st.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
-    return image_texts
+                errors.append(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
+    return image_texts, errors
 
 def encode_image(image):
     with BytesIO() as buffer:
@@ -160,6 +162,7 @@ def trim_silence(audio_file, file_name):
 
 def process_files_concurrently(uploaded_files, openai_client):
     transcriptions = []
+    errors = []
     with ThreadPoolExecutor() as executor:
         futures = []
         for i, uploaded_file in enumerate(uploaded_files):
@@ -187,9 +190,10 @@ def process_files_concurrently(uploaded_files, openai_client):
         for i, future in enumerate(as_completed(futures)):
             try:
                 result = future.result()
-                transcriptions.append(result)
-                st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
+                if result:  # Ensure the result is not None
+                    transcriptions.append(result)
+                    st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
             except Exception as e:
-                st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
+                errors.append(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
-    return transcriptions
+    return transcriptions, errors
