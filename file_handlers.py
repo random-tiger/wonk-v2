@@ -13,6 +13,7 @@ import streamlit as st
 from openai_client import OpenAIClient
 
 def process_images_concurrently(images, openai_client, context):
+    """Transcribes images to text using OpenAI API, processing them concurrently."""
     image_texts = []
     error_messages = []
 
@@ -39,22 +40,48 @@ def process_images_concurrently(images, openai_client, context):
 
     return image_texts
 
-def encode_image(image):
-    with BytesIO() as buffer:
-        image.save(buffer, format=image.format)
-        return base64.b64encode(buffer.getvalue()).decode()
-
-def read_docx(file, openai_client):
-    doc = docx.Document(file)
-    text = "\n".join([para.text for para in doc.paragraphs])
+def extract_images_from_docx(doc):
+    """Extracts images from a DOCX document."""
     images = []
-
     for rel in doc.part.rels.values():
         if "image" in rel.target_ref:
             image = rel.target_part.blob
             image_stream = BytesIO(image)
             images.append(image_stream)
+    return images
 
+def extract_images_from_pptx(slide):
+    """Extracts images from a PPTX slide."""
+    images = []
+    for shape in slide.shapes:
+        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE and hasattr(shape, 'image') and shape.image.blob:
+            image_stream = BytesIO(shape.image.blob)
+            images.append(image_stream)
+    return images
+
+def extract_images_from_pdf(page):
+    """Extracts images from a PDF page."""
+    images = []
+    image_list = page.get_images(full=True)
+    for img in image_list:
+        xref = img[0]
+        base_image = page.parent.extract_image(xref)
+        image_bytes = base_image["image"]
+        image_stream = BytesIO(image_bytes)
+        images.append(image_stream)
+    return images
+
+def encode_image(image):
+    """Encodes a PIL Image object to a Base64 string."""
+    with BytesIO() as buffer:
+        image.save(buffer, format=image.format)
+        return base64.b64encode(buffer.getvalue()).decode()
+
+def read_docx(file, openai_client):
+    """Reads DOCX files, extracts text and transcribes images."""
+    doc = docx.Document(file)
+    text = "\n".join([para.text for para in doc.paragraphs])
+    images = extract_images_from_docx(doc)
     image_texts = process_images_concurrently(images, openai_client, "DOCX")
     return text + "\n" + "\n".join(image_texts)
 
@@ -66,6 +93,7 @@ def read_excel(file):
     return df.to_string(index=False)
 
 def read_pdf(file, openai_client):
+    """Reads PDF files, extracts text and transcribes images."""
     document = fitz.open(stream=file.read(), filetype="pdf")
     text = ""
     images = []
@@ -73,41 +101,22 @@ def read_pdf(file, openai_client):
     for page_num in range(len(document)):
         page = document.load_page(page_num)
         text += page.get_text()
-        image_list = page.get_images(full=True)
-        for img in image_list:
-            xref = img[0]
-            base_image = document.extract_image(xref)
-            image_bytes = base_image["image"]
-            image_stream = BytesIO(image_bytes)
-            images.append(image_stream)
+        images.extend(extract_images_from_pdf(page))
 
     image_texts = process_images_concurrently(images, openai_client, "PDF")
     return text + "\n" + "\n".join(image_texts)
 
 def read_pptx(file, openai_client):
+    """Reads PPTX files, extracts text and transcribes images."""
     presentation = Presentation(file)
     slides = []
 
     for slide_num, slide in enumerate(presentation.slides, start=1):
         slide_text = f"--- Slide {slide_num} ---\n"
-        images = []
-        for shape in slide.shapes:
-            if shape.has_text_frame:
-                slide_text += "\n".join([para.text for para in shape.text_frame.paragraphs]) + "\n"
-            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-                try:
-                    if hasattr(shape, 'image') and shape.image.blob:
-                        image_stream = BytesIO(shape.image.blob)
-                        images.append(image_stream)
-                    else:
-                        st.warning(f"Slide {slide_num} contains a shape marked as an image but lacks an embedded image.")
-                except Exception as e:
-                    st.error(f"Error processing an image on slide {slide_num}: {e}")
-
-        if images:
-            image_texts = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
-            slide_text += "\nImage Descriptions:\n" + "\n".join(image_texts)
-        
+        slide_text += "\n".join([para.text for para in slide.shapes if para.has_text_frame]) + "\n"
+        images = extract_images_from_pptx(slide)
+        image_texts = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
+        slide_text += "\nImage Descriptions:\n" + "\n".join(image_texts)
         slides.append(slide_text)
 
     return "\n".join(slides)
