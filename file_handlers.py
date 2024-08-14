@@ -1,20 +1,16 @@
 import tempfile
-import moviepy.editor as mp
 from io import BytesIO
 from PIL import Image
-import base64
-import os
-import requests
-import streamlit as st
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pydub import AudioSegment
-from pydub.silence import detect_nonsilent
-import time
-import docx  # Make sure you have python-docx installed
 import pandas as pd
 import fitz  # PyMuPDF
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pydub import AudioSegment
+from pydub.silence import detect_nonsilent
+import docx
+import streamlit as st
+from openai_client import OpenAIClient
 
 def convert_video_to_mp3(uploaded_file, suffix):
     try:
@@ -31,13 +27,29 @@ def convert_video_to_mp3(uploaded_file, suffix):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
             audio_file_path = audio_file.name
 
-        # Using ffmpeg directly for conversion to avoid potential issues
         video.audio.write_audiofile(audio_file_path, codec='mp3')
 
         return audio_file_path
     except Exception as e:
         st.error(f"Error converting video to audio: {e}")
         return None
+
+def process_images_concurrently(images, openai_client, context):
+    image_texts = []
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(openai_client.transcribe_image, encode_image(image)): image for image in images}
+        for i, future in enumerate(as_completed(futures)):
+            try:
+                image_text = future.result()
+                image_texts.append(f"Image {i+1}: {image_text}")
+            except Exception as e:
+                st.error(f"Error processing an image from {context}: {e}")
+    return image_texts
+
+def encode_image(image):
+    with BytesIO() as buffer:
+        image.save(buffer, format=image.format)
+        return base64.b64encode(buffer.getvalue()).decode()
 
 def read_docx(file, openai_client):
     doc = docx.Document(file)
@@ -69,7 +81,7 @@ def read_pdf(file, openai_client):
         page = document.load_page(page_num)
         text += page.get_text()
         image_list = page.get_images(full=True)
-        for image_index, img in enumerate(page.get_images(full=True)):
+        for img in image_list:
             xref = img[0]
             base_image = document.extract_image(xref)
             image_bytes = base_image["image"]
@@ -87,12 +99,8 @@ def read_pptx(file, openai_client):
         slide_text = f"--- Slide {slide_num} ---\n"
         images = []
         for shape in slide.shapes:
-            # Extract text if available
             if shape.has_text_frame:
-                for paragraph in shape.text_frame.paragraphs:
-                    slide_text += paragraph.text + "\n"
-            
-            # Process image if the shape is a picture and has a valid blob
+                slide_text += "\n".join([para.text for para in shape.text_frame.paragraphs]) + "\n"
             if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
                 try:
                     if hasattr(shape, 'image') and shape.image.blob:
@@ -103,7 +111,6 @@ def read_pptx(file, openai_client):
                 except Exception as e:
                     st.error(f"Error processing an image on slide {slide_num}: {e}")
 
-        # If there are images, transcribe them and append descriptions to the slide text
         if images:
             image_texts = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
             slide_text += "\nImage Descriptions:\n" + "\n".join(image_texts)
@@ -111,66 +118,6 @@ def read_pptx(file, openai_client):
         slides.append(slide_text)
 
     return "\n".join(slides)
-
-def process_images_concurrently(images, openai_client, context):
-    image_texts = []
-    with ThreadPoolExecutor(max_workers=5) as executor:  # Limit to 5 workers
-        futures = {executor.submit(transcribe_image, openai_client, image_stream): image_stream for image_stream in images}
-        for i, future in enumerate(as_completed(futures)):
-            try:
-                image_text = future.result()
-                image_texts.append(f"Image {i+1}: {image_text}")
-            except Exception as e:
-                st.error(f"Error processing an image from {context}: {e}")
-
-    return image_texts
-
-def transcribe_image(openai_client, image_stream):
-    try:
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
-
-        payload = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "What’s in this image?"
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 300
-        }
-
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-        response.raise_for_status()  # This will raise an error for HTTP codes 4xx/5xx
-
-        return response.json()['choices'][0]['message']['content']
-
-    except requests.exceptions.HTTPError as http_err:
-        st.error(f"HTTP error occurred: {http_err}")  # Logs the HTTP error in Streamlit
-        return f"Error transcribing image: {http_err}"
-    except Exception as e:
-        st.error(f"An error occurred: {e}")  # Logs any other errors in Streamlit
-        return f"Error transcribing image: {e}"
-
-def encode_image(image):
-    with BytesIO() as buffer:
-        image.save(buffer, format=image.format)
-        return base64.b64encode(buffer.getvalue()).decode()
-
 
 def trim_silence(audio_file, file_name, silence_len=1000, silence_thresh=-40):
     sound = AudioSegment.from_file(audio_file, format="mp3")
@@ -183,7 +130,7 @@ def trim_silence(audio_file, file_name, silence_len=1000, silence_thresh=-40):
         
         trimmed_audio_file = BytesIO()
         trimmed_sound.export(trimmed_audio_file, format="mp3")
-        trimmed_audio_file.name = file_name  # Set the name attribute for the BytesIO object
+        trimmed_audio_file.name = file_name
         trimmed_audio_file.seek(0)
         return trimmed_audio_file
     return audio_file
@@ -226,4 +173,3 @@ def process_files_concurrently(uploaded_files, openai_client):
                 st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
     return transcriptions
-
