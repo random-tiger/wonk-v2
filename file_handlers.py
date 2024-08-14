@@ -15,7 +15,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 import time
-from openai_client import OpenAIClient
 
 def convert_video_to_mp3(uploaded_file, suffix):
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
