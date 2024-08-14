@@ -17,29 +17,20 @@ from pydub.silence import detect_nonsilent
 import time
 
 def convert_video_to_mp3(uploaded_file, suffix):
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
-            temp_video_file.write(uploaded_file.getbuffer())
-            temp_video_file_path = temp_video_file.name
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
+        temp_video_file.write(uploaded_file.getbuffer())
+        temp_video_file_path = temp_video_file.name
 
-        video = mp.VideoFileClip(temp_video_file_path)
+    video = mp.VideoFileClip(temp_video_file_path)
 
-        if video.audio is None:
-            st.error("No audio track found in the video file.")
-            return None
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
-            audio_file_path = audio_file.name
-
-        # Using ffmpeg directly for conversion to avoid potential issues
-        video.audio.write_audiofile(audio_file_path, codec='mp3')
-
-        return audio_file_path
-    except Exception as e:
-        st.error(f"Error converting video to audio: {e}")
+    if video.audio is None:
         return None
 
-# Other existing functions remain unchanged
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+        audio_file_path = audio_file.name
+
+    video.audio.write_audiofile(audio_file_path)
+    return audio_file_path
 
 def read_docx(file, openai_client):
     doc = docx.Document(file)
@@ -53,9 +44,7 @@ def read_docx(file, openai_client):
             images.append(image_stream)
 
     image_texts = process_images_concurrently(images, openai_client, "DOCX")
-    return text + "\n" + "\n".join(filter(None, image_texts))
-
-# Other existing functions remain unchanged
+    return text + "\n" + "\n".join(image_texts)
 
 def read_txt(file):
     return file.read().decode("utf-8")
@@ -81,7 +70,7 @@ def read_pdf(file, openai_client):
             images.append(image_stream)
 
     image_texts = process_images_concurrently(images, openai_client, "PDF")
-    return text + "\n" + "\n".join(filter(None, image_texts))
+    return text + "\n" + "\n".join(image_texts)
 
 def read_pptx(file, openai_client):
     presentation = Presentation(file)
@@ -98,7 +87,7 @@ def read_pptx(file, openai_client):
                 image_stream = BytesIO(image.blob)
                 images.append(image_stream)
 
-        slide_text += "\n".join(filter(None, process_images_concurrently(images, openai_client, f"Slide {slide_num}")))
+        slide_text += "\n".join(process_images_concurrently(images, openai_client, f"Slide {slide_num}"))
         slides.append(slide_text)
 
     return "\n".join(slides)
@@ -110,22 +99,51 @@ def process_images_concurrently(images, openai_client, context):
         for i, future in enumerate(as_completed(futures)):
             try:
                 image_text = future.result()
-                if image_text:  # Ensure the result is not None
-                    st.info(f"Processed image {i+1}/{len(images)} from {context}")
-                    image_texts.append(image_text)
+                st.info(f"Processed image {i+1}/{len(images)} from {context}")
+                image_texts.append(image_text)
             except Exception as e:
                 st.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
     return image_texts
-
-def transcribe_image(openai_client, image_stream):
-    image = Image.open(image_stream)
-    base64_image = encode_image(image)
-    return openai_client.transcribe_image(base64_image)
 
 def encode_image(image):
     with BytesIO() as buffer:
         image.save(buffer, format=image.format)
         return base64.b64encode(buffer.getvalue()).decode()
+
+def transcribe_image(openai_client, image_stream):
+    image = Image.open(image_stream)
+    base64_image = encode_image(image)
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {openai_client.api_key}"
+    }
+
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "What’s in this image?"
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": f"data:image/jpeg;base64,{base64_image}"
+                    }
+                ]
+            }
+        ],
+        "max_tokens": 300
+    }
+
+    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+    if response.status_code != 200:
+        st.error(f"Error: {response.status_code} - {response.text}")
+        response.raise_for_status()
+    return response.json()['choices'][0]['message']['content']
 
 def trim_silence(audio_file, file_name):
     sound = AudioSegment.from_file(audio_file, format="mp3")
@@ -148,10 +166,7 @@ def process_files_concurrently(uploaded_files, openai_client):
             st.info(f"Submitting file {i+1}/{len(uploaded_files)}: {getattr(uploaded_file, 'name', 'unknown')} for processing")
             if uploaded_file.type in ["video/quicktime", "video/mp4"]:
                 suffix = ".mov" if uploaded_file.type == "video/quicktime" else ".mp4"
-                audio_file_path = convert_video_to_mp3(uploaded_file, suffix)
-                if audio_file_path:
-                    trimmed_audio_file = trim_silence(audio_file_path, uploaded_file.name)
-                    futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
+                futures.append(executor.submit(convert_video_to_mp3, uploaded_file, suffix))
             elif uploaded_file.type == "audio/mpeg":
                 trimmed_audio_file = trim_silence(uploaded_file, uploaded_file.name)
                 futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
@@ -172,9 +187,8 @@ def process_files_concurrently(uploaded_files, openai_client):
         for i, future in enumerate(as_completed(futures)):
             try:
                 result = future.result()
-                if result:  # Ensure the result is not None
-                    transcriptions.append(result)
-                    st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
+                transcriptions.append(result)
+                st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
             except Exception as e:
                 st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
