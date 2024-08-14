@@ -125,14 +125,11 @@ def process_images_concurrently(images, openai_client, context):
 
     return image_texts
 
-def transcribe_image(openai_client, image_stream):
+def transcribe_image(self, base64_image):
     try:
-        image = Image.open(image_stream)
-        base64_image = encode_image(image)
-
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"
+            "Authorization": f"Bearer {self.api_key}"
         }
 
         payload = {
@@ -141,8 +138,16 @@ def transcribe_image(openai_client, image_stream):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "What’s in this image?"},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        {
+                            "type": "text",
+                            "text": "What’s in this image?"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
                     ]
                 }
             ],
@@ -150,9 +155,15 @@ def transcribe_image(openai_client, image_stream):
         }
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-        response.raise_for_status()
+        response.raise_for_status()  # This will raise an error for HTTP codes 4xx/5xx
+
         return response.json()['choices'][0]['message']['content']
+
+    except requests.exceptions.HTTPError as http_err:
+        st.error(f"HTTP error occurred: {http_err}")  # Logs the HTTP error in Streamlit
+        return f"Error transcribing image: {http_err}"
     except Exception as e:
+        st.error(f"An error occurred: {e}")  # Logs any other errors in Streamlit
         return f"Error transcribing image: {e}"
 
 def encode_image(image):
