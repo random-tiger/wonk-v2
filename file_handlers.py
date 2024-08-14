@@ -107,7 +107,7 @@ def encode_image(image):
         return base64.b64encode(buffer.getvalue()).decode()
 
 def transcribe_image(openai_client, image_stream):
-    api_key = os.getenv('OPENAI_API_KEY')
+    self.api_key = st.secrets["openai"]["api_key"]
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
 
