@@ -112,6 +112,19 @@ def read_pptx(file, openai_client):
 
     return "\n".join(slides)
 
+def save_as_docx(minutes):
+    """Save meeting minutes or any text content into a Word document."""
+    doc = docx.Document()
+    for key, value in minutes.items():
+        heading = ' '.join(word.capitalize() for word in key.split('_'))
+        doc.add_heading(heading, level=1)
+        doc.add_paragraph(value)
+        doc.add_paragraph()
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
 def process_files_concurrently(uploaded_files, openai_client):
     transcriptions = []
     with ThreadPoolExecutor() as executor:
