@@ -87,9 +87,10 @@ def read_pptx(file, openai_client):
         slide_text = f"--- Slide {slide_num} ---\n"
         images = []
         for shape in slide.shapes:
-            if hasattr(shape, "text"):
-                slide_text += shape.text + "\n"
-            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            if shape.has_text_frame:
+                for paragraph in shape.text_frame.paragraphs:
+                    slide_text += paragraph.text + "\n"
+            elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
                 image = shape.image
                 image_stream = BytesIO(image.blob)
                 images.append(image_stream)
@@ -101,7 +102,7 @@ def read_pptx(file, openai_client):
 
 def process_images_concurrently(images, openai_client, context):
     image_texts = []
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:  # Limit to 5 workers
         futures = {executor.submit(transcribe_image, openai_client, image_stream): image_stream for image_stream in images}
         for i, future in enumerate(as_completed(futures)):
             try:
