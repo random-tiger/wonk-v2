@@ -102,10 +102,11 @@ def read_pptx(file, openai_client):
                         st.warning(f"Slide {slide_num} contains a shape marked as an image but lacks an embedded image.")
                 except Exception as e:
                     st.error(f"Error processing an image on slide {slide_num}: {e}")
-        
-        # Process images concurrently
+
+        # If there are images, transcribe them and append descriptions to the slide text
         if images:
-            slide_text += "\n".join(process_images_concurrently(images, openai_client, f"Slide {slide_num}"))
+            image_texts = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
+            slide_text += "\nImage Descriptions:\n" + "\n".join(image_texts)
         
         slides.append(slide_text)
 
@@ -118,60 +119,47 @@ def process_images_concurrently(images, openai_client, context):
         for i, future in enumerate(as_completed(futures)):
             try:
                 image_text = future.result()
-                image_texts.append(image_text)
+                image_texts.append(f"Image {i+1}: {image_text}")
             except Exception as e:
                 st.error(f"Error processing an image from {context}: {e}")
 
-    if image_texts:
-        st.info(f"Processed {len(image_texts)} image(s) from {context}")
-
     return image_texts
+
+def transcribe_image(openai_client, image_stream):
+    try:
+        image = Image.open(image_stream)
+        base64_image = encode_image(image)
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"
+        }
+
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What’s in this image?"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                    ]
+                }
+            ],
+            "max_tokens": 300
+        }
+
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+        response.raise_for_status()
+        return response.json()['choices'][0]['message']['content']
+    except Exception as e:
+        return f"Error transcribing image: {e}"
 
 def encode_image(image):
     with BytesIO() as buffer:
         image.save(buffer, format=image.format)
         return base64.b64encode(buffer.getvalue()).decode()
 
-def transcribe_image(openai_client, image_stream):
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable not set")
-
-    image = Image.open(image_stream)
-    base64_image = encode_image(image)
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "What’s in this image?"
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}"
-                        }
-                    }
-                ]
-            }
-        ],
-        "max_tokens": 300
-    }
-
-    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-    if response.status_code != 200:
-        st.error(f"Error: {response.status_code} - {response.text}")
-        response.raise_for_status()
-    return response.json()['choices'][0]['message']['content']
 
 def trim_silence(audio_file, file_name, silence_len=1000, silence_thresh=-40):
     sound = AudioSegment.from_file(audio_file, format="mp3")
