@@ -21,6 +21,13 @@ import pandas as pd
 from docx import Document
 import time
 
+# Initialize OpenAI client
+try:
+    openai_client = OpenAIClient()
+except ValueError as e:
+    st.error(f"Error initializing OpenAI client: {e}")
+    st.stop()
+
 # Function to save meeting minutes as a Word document
 def save_as_docx(minutes):
     doc = Document()
