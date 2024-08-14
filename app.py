@@ -21,13 +21,6 @@ import pandas as pd
 from docx import Document
 import time
 
-# Initialize OpenAI client
-try:
-    openai_client = OpenAIClient()
-except ValueError as e:
-    st.error(f"Error initializing OpenAI client: {e}")
-    st.stop()
-
 # Function to save meeting minutes as a Word document
 def save_as_docx(minutes):
     doc = Document()
@@ -67,6 +60,17 @@ def main():
 
     st.sidebar.title("Wonk")
     st.sidebar.info("Upload mp3, mp4, mov, docx, txt, xlsx, pdf, pptx, or image files to start!")
+
+    # Debugging statement to print secrets
+    st.write(f"Streamlit secrets: {st.secrets}")
+
+    # Initialize OpenAI client
+    try:
+        openai_client = OpenAIClient()
+    except ValueError as e:
+        st.error(f"Error initializing OpenAI client: {e}")
+        st.stop()
+
     uploaded_files = st.sidebar.file_uploader("Upload audio, video, text, or image files", type=["mp3", "mp4", "mov", "docx", "txt", "xlsx", "pdf", "pptx", "jpg", "jpeg", "png"], accept_multiple_files=True)
     process_files_button = st.sidebar.button("Process Files")
 
