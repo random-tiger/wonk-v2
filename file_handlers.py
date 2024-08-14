@@ -1,15 +1,20 @@
 import tempfile
-from io import BytesIO
-from PIL import Image
+import moviepy.editor as mp
+import docx
 import pandas as pd
-import fitz  # PyMuPDF
+import fitz
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from PIL import Image
+from io import BytesIO
+import base64
+import os
+import requests
+import streamlit as st
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
-import docx
-import streamlit as st
+import time
 from openai_client import OpenAIClient
 
 def convert_video_to_mp3(uploaded_file, suffix):
@@ -107,7 +112,7 @@ def encode_image(image):
         return base64.b64encode(buffer.getvalue()).decode()
 
 def transcribe_image(openai_client, image_stream):
-    self.api_key = st.secrets["openai"]["api_key"]
+    api_key = os.getenv('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
 
