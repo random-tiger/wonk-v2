@@ -1,10 +1,25 @@
 import streamlit as st
-from io import BytesIO
-from file_handlers import process_files_concurrently, save_as_docx
+import os
+from file_handlers import (
+    convert_video_to_mp3,
+    read_docx,
+    read_txt,
+    read_excel,
+    read_pdf,
+    read_pptx,
+    encode_image,
+    process_files_concurrently,
+    trim_silence  # Ensure this is imported
+)
 from openai_client import OpenAIClient
+from pre_canned_prompts import pre_canned_prompts
+from io import BytesIO
+from PIL import Image
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-from streamlit_quill import st_quill
+from streamlit_quill import st_quill  # Make sure this import is correct
 import pandas as pd
+from docx import Document
+import time
 
 # Initialize OpenAI client
 try:
