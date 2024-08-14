@@ -3,6 +3,8 @@ import openai
 import streamlit as st
 import time
 
+api_key = st.secrets["OPENAI_API_KEY"]
+
 class OpenAIClient:
     def __init__(self):
         try:
