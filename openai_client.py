@@ -35,13 +35,13 @@ class OpenAIClient:
             ]
         )
         return response.choices[0].message.content
-        
+
     def transcribe_image(self, base64_image):
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
-    
+
         payload = {
             "model": "gpt-4o-mini",
             "messages": [
@@ -61,14 +61,16 @@ class OpenAIClient:
             ],
             "max_tokens": 300
         }
-    
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()['choices'][0]['message']['content']
 
-# Ensure that your Streamlit secrets are correctly configured in .streamlit/secrets.toml
-# [openai]
-# api_key = "your_openai_api_key_here"
+        st.write(f"Payload: {payload}")  # Debug payload
 
-# For testing, you can directly print out the secrets
-st.write(f"Secrets: {st.secrets}")
+        try:
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            response.raise_for_status()
+            return response.json()['choices'][0]['message']['content']
+        except requests.exceptions.HTTPError as http_err:
+            st.error(f"HTTP error occurred: {http_err}")
+            st.error(f"Response: {response.text}")
+        except Exception as err:
+            st.error(f"Other error occurred: {err}")
+        return None
