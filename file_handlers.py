@@ -52,18 +52,27 @@ def convert_video_to_mp3(uploaded_file, suffix):
 def process_images_concurrently(images, openai_client, context):
     image_texts = []
     with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(openai_client.transcribe_image, encode_image(image)): image for image in images}
+        futures = {}
+        for image in images:
+            try:
+                img = Image.open(image)  # Open the image from BytesIO
+                base64_image = encode_image(img)  # Encode the image
+                futures[executor.submit(openai_client.transcribe_image, base64_image)] = image
+            except Exception as e:
+                st.error(f"Error opening image for {context}: {e}")
+
         for i, future in enumerate(as_completed(futures)):
             try:
                 image_text = future.result()
                 image_texts.append(f"Image {i+1}: {image_text}")
             except Exception as e:
                 st.error(f"Error processing an image from {context}: {e}")
+
     return image_texts
 
 def encode_image(image):
     with BytesIO() as buffer:
-        image.save(buffer, format=image.format)
+        image.save(buffer, format=image.format)  # Save the image to buffer
         return base64.b64encode(buffer.getvalue()).decode()
 
 def read_docx(file, openai_client):
