@@ -12,6 +12,21 @@ import docx
 import streamlit as st
 from openai_client import OpenAIClient
 
+# Existing functions here...
+
+def save_as_docx(minutes):
+    """Save meeting minutes or any text content into a Word document."""
+    doc = docx.Document()
+    for key, value in minutes.items():
+        heading = ' '.join(word.capitalize() for word in key.split('_'))
+        doc.add_heading(heading, level=1)
+        doc.add_paragraph(value)
+        doc.add_paragraph()
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
+
 def convert_video_to_mp3(uploaded_file, suffix):
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
