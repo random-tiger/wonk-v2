@@ -20,12 +20,11 @@ class OpenAIClient:
     def transcribe_audio(self, audio_file):
         # Add a short delay before transcription
         time.sleep(1)
-        audio_file.seek(0)  # Ensure the file pointer is at the beginning
-        transcription = self.client.Audio.transcribe("whisper-1", file=audio_file)
+        transcription = self.client.audio.transcriptions.create(model="whisper-1", file=audio_file)
         return transcription['text'] if isinstance(transcription, dict) else transcription.text
 
     def generate_response(self, transcription, model, custom_prompt):
-        response = self.client.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model=model,
             temperature=0,
             messages=[
@@ -65,3 +64,4 @@ class OpenAIClient:
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
         return response.json()['choices'][0]['message']['content']
+
