@@ -43,15 +43,15 @@ def read_docx(file, openai_client):
             image_stream = BytesIO(image)
             images.append(image_stream)
 
-    image_texts, errors = process_images_concurrently(images, openai_client, "DOCX")
-    return text + "\n" + "\n".join(image_texts), errors
+    image_texts = process_images_concurrently(images, openai_client, "DOCX")
+    return text + "\n" + "\n".join(image_texts)
 
 def read_txt(file):
-    return file.read().decode("utf-8"), []
+    return file.read().decode("utf-8")
 
 def read_excel(file):
     df = pd.read_excel(file)
-    return df.to_string(index=False), []
+    return df.to_string(index=False)
 
 def read_pdf(file, openai_client):
     document = fitz.open(stream=file.read(), filetype="pdf")
@@ -69,13 +69,12 @@ def read_pdf(file, openai_client):
             image_stream = BytesIO(image_bytes)
             images.append(image_stream)
 
-    image_texts, errors = process_images_concurrently(images, openai_client, "PDF")
-    return text + "\n" + "\n".join(image_texts), errors
+    image_texts = process_images_concurrently(images, openai_client, "PDF")
+    return text + "\n" + "\n".join(image_texts)
 
 def read_pptx(file, openai_client):
     presentation = Presentation(file)
     slides = []
-    errors = []
 
     for slide_num, slide in enumerate(presentation.slides, start=1):
         slide_text = f"--- Slide {slide_num} ---\n"
@@ -88,25 +87,23 @@ def read_pptx(file, openai_client):
                 image_stream = BytesIO(image.blob)
                 images.append(image_stream)
 
-        image_texts, slide_errors = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
-        slides.append(slide_text + "\n" + "\n".join(image_texts))
-        errors.extend(slide_errors)
+        slide_text += "\n".join(process_images_concurrently(images, openai_client, f"Slide {slide_num}"))
+        slides.append(slide_text)
 
-    return "\n".join(slides), errors
+    return "\n".join(slides)
 
 def process_images_concurrently(images, openai_client, context):
     image_texts = []
-    errors = []
     with ThreadPoolExecutor() as executor:
         futures = {executor.submit(transcribe_image, openai_client, image_stream): image_stream for image_stream in images}
         for i, future in enumerate(as_completed(futures)):
             try:
                 image_text = future.result()
-                if image_text:  # Ensure the result is not None
-                    image_texts.append(image_text)
+                st.info(f"Processed image {i+1}/{len(images)} from {context}")
+                image_texts.append(image_text)
             except Exception as e:
-                errors.append(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
-    return image_texts, errors
+                st.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
+    return image_texts
 
 def encode_image(image):
     with BytesIO() as buffer:
@@ -163,7 +160,6 @@ def trim_silence(audio_file, file_name):
 
 def process_files_concurrently(uploaded_files, openai_client):
     transcriptions = []
-    errors = []
     with ThreadPoolExecutor() as executor:
         futures = []
         for i, uploaded_file in enumerate(uploaded_files):
@@ -190,11 +186,10 @@ def process_files_concurrently(uploaded_files, openai_client):
 
         for i, future in enumerate(as_completed(futures)):
             try:
-                result, file_errors = future.result()
+                result = future.result()
                 transcriptions.append(result)
-                errors.extend(file_errors)
                 st.info(f"Completed processing file {i+1}/{len(uploaded_files)}")
             except Exception as e:
-                errors.append(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
+                st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
-    return transcriptions, errors
+    return transcriptions
