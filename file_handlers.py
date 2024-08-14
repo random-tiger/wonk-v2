@@ -12,46 +12,9 @@ import docx
 import streamlit as st
 from openai_client import OpenAIClient
 
-# Existing functions here...
-
-def save_as_docx(minutes):
-    """Save meeting minutes or any text content into a Word document."""
-    doc = docx.Document()
-    for key, value in minutes.items():
-        heading = ' '.join(word.capitalize() for word in key.split('_'))
-        doc.add_heading(heading, level=1)
-        doc.add_paragraph(value)
-        doc.add_paragraph()
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer
-
-def convert_video_to_mp3(uploaded_file, suffix):
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
-            temp_video_file.write(uploaded_file.getbuffer())
-            temp_video_file_path = temp_video_file.name
-
-        video = mp.VideoFileClip(temp_video_file_path)
-
-        if video.audio is None:
-            st.error("No audio track found in the video file.")
-            return None
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
-            audio_file_path = audio_file.name
-
-        video.audio.write_audiofile(audio_file_path, codec='mp3')
-
-        return audio_file_path
-    except Exception as e:
-        st.error(f"Error converting video to audio: {e}")
-        return None
-
 def process_images_concurrently(images, openai_client, context):
     image_texts = []
-    error_messages = []  # Collect errors to display later
+    error_messages = []
 
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {}
@@ -70,7 +33,6 @@ def process_images_concurrently(images, openai_client, context):
             except Exception as e:
                 error_messages.append(f"Error processing an image from {context}: {e}")
 
-    # Now handle UI updates on the main thread
     if error_messages:
         for error in error_messages:
             st.error(error)  # Display errors on the main thread
@@ -79,7 +41,7 @@ def process_images_concurrently(images, openai_client, context):
 
 def encode_image(image):
     with BytesIO() as buffer:
-        image.save(buffer, format=image.format)  # Save the image to buffer
+        image.save(buffer, format=image.format)
         return base64.b64encode(buffer.getvalue()).decode()
 
 def read_docx(file, openai_client):
@@ -149,22 +111,6 @@ def read_pptx(file, openai_client):
         slides.append(slide_text)
 
     return "\n".join(slides)
-
-def trim_silence(audio_file, file_name, silence_len=1000, silence_thresh=-40):
-    sound = AudioSegment.from_file(audio_file, format="mp3")
-    nonsilent_ranges = detect_nonsilent(sound, min_silence_len=silence_len, silence_thresh=silence_thresh)
-    
-    if nonsilent_ranges:
-        start_trim = nonsilent_ranges[0][0]
-        end_trim = nonsilent_ranges[-1][1]
-        trimmed_sound = sound[start_trim:end_trim]
-        
-        trimmed_audio_file = BytesIO()
-        trimmed_sound.export(trimmed_audio_file, format="mp3")
-        trimmed_audio_file.name = file_name
-        trimmed_audio_file.seek(0)
-        return trimmed_audio_file
-    return audio_file
 
 def process_files_concurrently(uploaded_files, openai_client):
     transcriptions = []
