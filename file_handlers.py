@@ -96,14 +96,14 @@ def read_docx(file, openai_client):
     doc = docx.Document(file)
     content = []
     for para in doc.paragraphs:
-        content.append(para.text)
+        content.append(para.text + "\n")  # Add line breaks after each paragraph
 
     images = extract_images_from_docx(doc)
     if images:
         image_texts = process_images_concurrently(images, openai_client, "DOCX")
-        content.append("\nImage Descriptions:\n" + "\n".join(image_texts))
+        content.append("\nImage Descriptions:\n" + "\n".join(image_texts) + "\n")
 
-    return "\n".join(content)
+    return "".join(content)
 
 def read_txt(file):
     return file.read().decode("utf-8")
@@ -120,12 +120,12 @@ def read_pdf(file, openai_client):
     for page_num in range(len(document)):
         page = document.load_page(page_num)
         page_content = f"--- Page {page_num + 1} ---\n"
-        page_content += page.get_text() + "\n"
+        page_content += page.get_text("text") + "\n"  # Ensure proper text extraction with line breaks
 
         images = extract_images_from_pdf(page)
         if images:
             image_texts = process_images_concurrently(images, openai_client, f"Page {page_num + 1}")
-            page_content += "\nImage Descriptions:\n" + "\n".join(image_texts)
+            page_content += "\nImage Descriptions:\n" + "\n".join(image_texts) + "\n"
 
         pages.append(page_content)
 
@@ -138,12 +138,15 @@ def read_pptx(file, openai_client):
 
     for slide_num, slide in enumerate(presentation.slides, start=1):
         slide_content = f"--- Slide {slide_num} ---\n"
-        slide_content += "\n".join([shape.text for shape in slide.shapes if shape.has_text_frame]) + "\n"
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for paragraph in shape.text_frame.paragraphs:
+                    slide_content += paragraph.text + "\n"  # Add line breaks after each paragraph
 
         images = extract_images_from_pptx(slide)
         if images:
             image_texts = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
-            slide_content += "\nImage Descriptions:\n" + "\n".join(image_texts)
+            slide_content += "\nImage Descriptions:\n" + "\n".join(image_texts) + "\n"
 
         slides.append(slide_content)
 
