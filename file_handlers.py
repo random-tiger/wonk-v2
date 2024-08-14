@@ -111,17 +111,45 @@ def encode_image(image):
         return base64.b64encode(buffer.getvalue()).decode()
 
 def transcribe_image(openai_client, image_stream):
-    # Convert the image to base64 format
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable not set")
+
     image = Image.open(image_stream)
     base64_image = encode_image(image)
 
-    # Use the transcribe_image method of the OpenAIClient class
-    try:
-        response_content = openai_client.transcribe_image(base64_image)
-        return response_content
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error: {e}")
-        raise
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "What’s in this image?"
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ],
+        "max_tokens": 300
+    }
+
+    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+    if response.status_code != 200:
+        st.error(f"Error: {response.status_code} - {response.text}")
+        response.raise_for_status()
+    return response.json()['choices'][0]['message']['content']
 
 def trim_silence(audio_file, file_name):
     sound = AudioSegment.from_file(audio_file, format="mp3")
