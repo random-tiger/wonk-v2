@@ -12,6 +12,12 @@ import docx
 import streamlit as st
 from openai_client import OpenAIClient
 
+def encode_image(image):
+    """Encodes a PIL Image object to a Base64 string."""
+    with BytesIO() as buffer:
+        image.save(buffer, format=image.format)
+        return base64.b64encode(buffer.getvalue()).decode()
+
 def process_images_concurrently(images, openai_client, context):
     """Transcribes images to text using OpenAI API, processing them concurrently."""
     image_texts = []
@@ -71,19 +77,19 @@ def extract_images_from_pdf(page):
         images.append(image_stream)
     return images
 
-def encode_image(image):
-    """Encodes a PIL Image object to a Base64 string."""
-    with BytesIO() as buffer:
-        image.save(buffer, format=image.format)
-        return base64.b64encode(buffer.getvalue()).decode()
-
 def read_docx(file, openai_client):
     """Reads DOCX files, extracts text and transcribes images."""
     doc = docx.Document(file)
-    text = "\n".join([para.text for para in doc.paragraphs])
+    content = []
+    for para in doc.paragraphs:
+        content.append(para.text)
+
     images = extract_images_from_docx(doc)
-    image_texts = process_images_concurrently(images, openai_client, "DOCX")
-    return text + "\n" + "\n".join(image_texts)
+    if images:
+        image_texts = process_images_concurrently(images, openai_client, "DOCX")
+        content.append("\nImage Descriptions:\n" + "\n".join(image_texts))
+
+    return "\n".join(content)
 
 def read_txt(file):
     return file.read().decode("utf-8")
@@ -95,16 +101,21 @@ def read_excel(file):
 def read_pdf(file, openai_client):
     """Reads PDF files, extracts text and transcribes images."""
     document = fitz.open(stream=file.read(), filetype="pdf")
-    text = ""
-    images = []
+    pages = []
 
     for page_num in range(len(document)):
         page = document.load_page(page_num)
-        text += page.get_text()
-        images.extend(extract_images_from_pdf(page))
+        page_content = f"--- Page {page_num + 1} ---\n"
+        page_content += page.get_text() + "\n"
 
-    image_texts = process_images_concurrently(images, openai_client, "PDF")
-    return text + "\n" + "\n".join(image_texts)
+        images = extract_images_from_pdf(page)
+        if images:
+            image_texts = process_images_concurrently(images, openai_client, f"Page {page_num + 1}")
+            page_content += "\nImage Descriptions:\n" + "\n".join(image_texts)
+
+        pages.append(page_content)
+
+    return "\n".join(pages)
 
 def read_pptx(file, openai_client):
     """Reads PPTX files, extracts text and transcribes images."""
@@ -112,12 +123,15 @@ def read_pptx(file, openai_client):
     slides = []
 
     for slide_num, slide in enumerate(presentation.slides, start=1):
-        slide_text = f"--- Slide {slide_num} ---\n"
-        slide_text += "\n".join([para.text for para in slide.shapes if para.has_text_frame]) + "\n"
+        slide_content = f"--- Slide {slide_num} ---\n"
+        slide_content += "\n".join([para.text for para in slide.shapes if para.has_text_frame]) + "\n"
+
         images = extract_images_from_pptx(slide)
-        image_texts = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
-        slide_text += "\nImage Descriptions:\n" + "\n".join(image_texts)
-        slides.append(slide_text)
+        if images:
+            image_texts = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
+            slide_content += "\nImage Descriptions:\n" + "\n".join(image_texts)
+
+        slides.append(slide_content)
 
     return "\n".join(slides)
 
@@ -171,4 +185,4 @@ def process_files_concurrently(uploaded_files, openai_client):
             except Exception as e:
                 st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
-    return transcriptions
+    return "\n\n".join(transcriptions)
