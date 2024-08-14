@@ -12,98 +12,35 @@ import docx
 import streamlit as st
 from openai_client import OpenAIClient
 
-def encode_image(image):
-    """Encodes a PIL Image object to a Base64 string."""
-    with BytesIO() as buffer:
-        image.save(buffer, format=image.format)
-        return base64.b64encode(buffer.getvalue()).decode()
+def convert_video_to_mp3(uploaded_file, suffix):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
+        temp_video_file.write(uploaded_file.getbuffer())
+        temp_video_file_path = temp_video_file.name
 
-def process_images_concurrently(images, openai_client, context):
-    """Transcribes images to text using OpenAI API, processing them concurrently."""
-    image_texts = []
-    error_messages = []
+    video = mp.VideoFileClip(temp_video_file_path)
 
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {}
-        for image in images:
-            try:
-                img = Image.open(image)  # Open the image from BytesIO
-                base64_image = encode_image(img)  # Encode the image
-                futures[executor.submit(openai_client.transcribe_image, base64_image)] = image
-            except Exception as e:
-                error_messages.append(f"Error opening image for {context}: {e}")
+    if video.audio is None:
+        return None
 
-        for i, future in enumerate(as_completed(futures)):
-            try:
-                image_text = future.result()
-                image_texts.append(f"Image {i+1}: {image_text}")
-            except Exception as e:
-                error_messages.append(f"Error processing an image from {context}: {e}")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+        audio_file_path = audio_file.name
 
-    if error_messages:
-        for error in error_messages:
-            st.error(error)  # Display errors on the main thread
-
-    return image_texts
-
-def extract_images_from_docx(doc):
-    """Extracts images from a DOCX document."""
-    images = []
-    for rel in doc.part.rels.values():
-        if "image" in rel.target_ref:
-            try:
-                image = rel.target_part.blob
-                if image:
-                    image_stream = BytesIO(image)
-                    images.append(image_stream)
-            except Exception as e:
-                st.warning(f"Could not extract image from DOCX: {e}")
-    return images
-
-def extract_images_from_pptx(slide):
-    """Extracts images from a PPTX slide."""
-    images = []
-    for shape in slide.shapes:
-        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-            try:
-                if hasattr(shape, 'image') and shape.image.blob:
-                    image_stream = BytesIO(shape.image.blob)
-                    images.append(image_stream)
-                else:
-                    st.warning(f"Slide contains a shape marked as an image but lacks an embedded image.")
-            except Exception as e:
-                st.error(f"Error processing an image on slide: {e}")
-    return images
-
-def extract_images_from_pdf(page):
-    """Extracts images from a PDF page."""
-    images = []
-    image_list = page.get_images(full=True)
-    for img in image_list:
-        try:
-            xref = img[0]
-            base_image = page.parent.extract_image(xref)
-            image_bytes = base_image["image"]
-            if image_bytes:
-                image_stream = BytesIO(image_bytes)
-                images.append(image_stream)
-        except Exception as e:
-            st.warning(f"Could not extract image from PDF: {e}")
-    return images
+    video.audio.write_audiofile(audio_file_path)
+    return audio_file_path
 
 def read_docx(file, openai_client):
-    """Reads DOCX files, extracts text and transcribes images."""
     doc = docx.Document(file)
-    content = []
-    for para in doc.paragraphs:
-        content.append(para.text + "\n")  # Add line breaks after each paragraph
+    text = "\n".join([para.text for para in doc.paragraphs])
+    images = []
 
-    images = extract_images_from_docx(doc)
-    if images:
-        image_texts = process_images_concurrently(images, openai_client, "DOCX")
-        content.append("\nImage Descriptions:\n" + "\n".join(image_texts) + "\n")
+    for rel in doc.part.rels.values():
+        if "image" in rel.target_ref:
+            image = rel.target_part.blob
+            image_stream = BytesIO(image)
+            images.append(image_stream)
 
-    return "".join(content)
+    image_texts = process_images_concurrently(images, openai_client, "DOCX")
+    return text + "\n" + "\n".join(image_texts)
 
 def read_txt(file):
     return file.read().decode("utf-8")
@@ -113,57 +50,115 @@ def read_excel(file):
     return df.to_string(index=False)
 
 def read_pdf(file, openai_client):
-    """Reads PDF files, extracts text and transcribes images."""
     document = fitz.open(stream=file.read(), filetype="pdf")
-    pages = []
+    text = ""
+    images = []
 
     for page_num in range(len(document)):
         page = document.load_page(page_num)
-        page_content = f"--- Page {page_num + 1} ---\n"
-        page_content += page.get_text("text") + "\n"  # Ensure proper text extraction with line breaks
+        text += page.get_text()
+        image_list = page.get_images(full=True)
+        for image_index, img in enumerate(page.get_images(full=True)):
+            xref = img[0]
+            base_image = document.extract_image(xref)
+            image_bytes = base_image["image"]
+            image_stream = BytesIO(image_bytes)
+            images.append(image_stream)
 
-        images = extract_images_from_pdf(page)
-        if images:
-            image_texts = process_images_concurrently(images, openai_client, f"Page {page_num + 1}")
-            page_content += "\nImage Descriptions:\n" + "\n".join(image_texts) + "\n"
-
-        pages.append(page_content)
-
-    return "\n".join(pages)
+    image_texts = process_images_concurrently(images, openai_client, "PDF")
+    return text + "\n" + "\n".join(image_texts)
 
 def read_pptx(file, openai_client):
-    """Reads PPTX files, extracts text and transcribes images."""
     presentation = Presentation(file)
     slides = []
 
     for slide_num, slide in enumerate(presentation.slides, start=1):
-        slide_content = f"--- Slide {slide_num} ---\n"
+        slide_text = f"--- Slide {slide_num} ---\n"
+        images = []
         for shape in slide.shapes:
-            if shape.has_text_frame:
-                for paragraph in shape.text_frame.paragraphs:
-                    slide_content += paragraph.text + "\n"  # Add line breaks after each paragraph
+            if hasattr(shape, "text"):
+                slide_text += shape.text + "\n"
+            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+                image = shape.image
+                image_stream = BytesIO(image.blob)
+                images.append(image_stream)
 
-        images = extract_images_from_pptx(slide)
-        if images:
-            image_texts = process_images_concurrently(images, openai_client, f"Slide {slide_num}")
-            slide_content += "\nImage Descriptions:\n" + "\n".join(image_texts) + "\n"
-
-        slides.append(slide_content)
+        slide_text += "\n".join(process_images_concurrently(images, openai_client, f"Slide {slide_num}"))
+        slides.append(slide_text)
 
     return "\n".join(slides)
 
-def save_as_docx(minutes):
-    """Save meeting minutes or any text content into a Word document."""
-    doc = docx.Document()
-    for key, value in minutes.items():
-        heading = ' '.join(word.capitalize() for word in key.split('_'))
-        doc.add_heading(heading, level=1)
-        doc.add_paragraph(value)
-        doc.add_paragraph()
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer
+def process_images_concurrently(images, openai_client, context):
+    image_texts = []
+    with ThreadPoolExecutor() as executor:
+        futures = {executor.submit(transcribe_image, openai_client, image_stream): image_stream for image_stream in images}
+        for i, future in enumerate(as_completed(futures)):
+            try:
+                image_text = future.result()
+                st.info(f"Processed image {i+1}/{len(images)} from {context}")
+                image_texts.append(image_text)
+            except Exception as e:
+                st.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
+    return image_texts
+
+def encode_image(image):
+    with BytesIO() as buffer:
+        image.save(buffer, format=image.format)
+        return base64.b64encode(buffer.getvalue()).decode()
+
+def transcribe_image(openai_client, image_stream):
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable not set")
+
+    image = Image.open(image_stream)
+    base64_image = encode_image(image)
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "What’s in this image?"
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ],
+        "max_tokens": 300
+    }
+
+    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+    if response.status_code != 200:
+        st.error(f"Error: {response.status_code} - {response.text}")
+        response.raise_for_status()
+    return response.json()['choices'][0]['message']['content']
+
+def trim_silence(audio_file, file_name):
+    sound = AudioSegment.from_file(audio_file, format="mp3")
+    nonsilent_ranges = detect_nonsilent(sound, min_silence_len=1000, silence_thresh=sound.dBFS-16)
+    if nonsilent_ranges:
+        start_trim, end_trim = nonsilent_ranges[0]
+        trimmed_sound = sound[start_trim:]
+        trimmed_audio_file = BytesIO()
+        trimmed_sound.export(trimmed_audio_file, format="mp3")
+        trimmed_audio_file.name = file_name  # Set the name attribute for the BytesIO object
+        trimmed_audio_file.seek(0)
+        return trimmed_audio_file
+    return audio_file
 
 def process_files_concurrently(uploaded_files, openai_client):
     transcriptions = []
@@ -173,10 +168,7 @@ def process_files_concurrently(uploaded_files, openai_client):
             st.info(f"Submitting file {i+1}/{len(uploaded_files)}: {getattr(uploaded_file, 'name', 'unknown')} for processing")
             if uploaded_file.type in ["video/quicktime", "video/mp4"]:
                 suffix = ".mov" if uploaded_file.type == "video/quicktime" else ".mp4"
-                audio_file_path = convert_video_to_mp3(uploaded_file, suffix)
-                if audio_file_path:
-                    trimmed_audio_file = trim_silence(audio_file_path, uploaded_file.name)
-                    futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
+                futures.append(executor.submit(convert_video_to_mp3, uploaded_file, suffix))
             elif uploaded_file.type == "audio/mpeg":
                 trimmed_audio_file = trim_silence(uploaded_file, uploaded_file.name)
                 futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
@@ -202,4 +194,4 @@ def process_files_concurrently(uploaded_files, openai_client):
             except Exception as e:
                 st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
-    return "\n\n".join(transcriptions)
+    return transcriptions
