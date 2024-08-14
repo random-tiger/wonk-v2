@@ -1,12 +1,7 @@
 import tempfile
 import moviepy.editor as mp
-import docx
-import pandas as pd
-import fitz
-from pptx import Presentation
-from pptx.enum.shapes import MSO_SHAPE_TYPE
-from PIL import Image
 from io import BytesIO
+from PIL import Image
 import base64
 import os
 import requests
@@ -15,22 +10,34 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 import time
+import docx  # Make sure you have python-docx installed
+import pandas as pd
+import fitz  # PyMuPDF
+from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 def convert_video_to_mp3(uploaded_file, suffix):
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
-        temp_video_file.write(uploaded_file.getbuffer())
-        temp_video_file_path = temp_video_file.name
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
+            temp_video_file.write(uploaded_file.getbuffer())
+            temp_video_file_path = temp_video_file.name
 
-    video = mp.VideoFileClip(temp_video_file_path)
+        video = mp.VideoFileClip(temp_video_file_path)
 
-    if video.audio is None:
+        if video.audio is None:
+            st.error("No audio track found in the video file.")
+            return None
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+            audio_file_path = audio_file.name
+
+        # Using ffmpeg directly for conversion to avoid potential issues
+        video.audio.write_audiofile(audio_file_path, codec='mp3')
+
+        return audio_file_path
+    except Exception as e:
+        st.error(f"Error converting video to audio: {e}")
         return None
-
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
-        audio_file_path = audio_file.name
-
-    video.audio.write_audiofile(audio_file_path)
-    return audio_file_path
 
 def read_docx(file, openai_client):
     doc = docx.Document(file)
@@ -111,12 +118,16 @@ def encode_image(image):
         return base64.b64encode(buffer.getvalue()).decode()
 
 def transcribe_image(openai_client, image_stream):
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY environment variable not set")
+
     image = Image.open(image_stream)
     base64_image = encode_image(image)
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {openai_client.api_key}"
+        "Authorization": f"Bearer {api_key}"
     }
 
     payload = {
@@ -131,7 +142,9 @@ def transcribe_image(openai_client, image_stream):
                     },
                     {
                         "type": "image_url",
-                        "image_url": f"data:image/{image.format.lower()};base64,{base64_image}"
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
                     }
                 ]
             }
@@ -145,12 +158,15 @@ def transcribe_image(openai_client, image_stream):
         response.raise_for_status()
     return response.json()['choices'][0]['message']['content']
 
-def trim_silence(audio_file, file_name):
+def trim_silence(audio_file, file_name, silence_len=1000, silence_thresh=-40):
     sound = AudioSegment.from_file(audio_file, format="mp3")
-    nonsilent_ranges = detect_nonsilent(sound, min_silence_len=1000, silence_thresh=sound.dBFS-16)
+    nonsilent_ranges = detect_nonsilent(sound, min_silence_len=silence_len, silence_thresh=silence_thresh)
+    
     if nonsilent_ranges:
-        start_trim, end_trim = nonsilent_ranges[0]
-        trimmed_sound = sound[start_trim:]
+        start_trim = nonsilent_ranges[0][0]
+        end_trim = nonsilent_ranges[-1][1]
+        trimmed_sound = sound[start_trim:end_trim]
+        
         trimmed_audio_file = BytesIO()
         trimmed_sound.export(trimmed_audio_file, format="mp3")
         trimmed_audio_file.name = file_name  # Set the name attribute for the BytesIO object
@@ -166,7 +182,10 @@ def process_files_concurrently(uploaded_files, openai_client):
             st.info(f"Submitting file {i+1}/{len(uploaded_files)}: {getattr(uploaded_file, 'name', 'unknown')} for processing")
             if uploaded_file.type in ["video/quicktime", "video/mp4"]:
                 suffix = ".mov" if uploaded_file.type == "video/quicktime" else ".mp4"
-                futures.append(executor.submit(convert_video_to_mp3, uploaded_file, suffix))
+                audio_file_path = convert_video_to_mp3(uploaded_file, suffix)
+                if audio_file_path:
+                    trimmed_audio_file = trim_silence(audio_file_path, uploaded_file.name)
+                    futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
             elif uploaded_file.type == "audio/mpeg":
                 trimmed_audio_file = trim_silence(uploaded_file, uploaded_file.name)
                 futures.append(executor.submit(openai_client.transcribe_audio, trimmed_audio_file))
@@ -193,3 +212,4 @@ def process_files_concurrently(uploaded_files, openai_client):
                 st.error(f"Error processing file {i+1}/{len(uploaded_files)}: {e}")
 
     return transcriptions
+
