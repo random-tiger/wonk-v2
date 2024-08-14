@@ -51,18 +51,28 @@ def extract_images_from_docx(doc):
     images = []
     for rel in doc.part.rels.values():
         if "image" in rel.target_ref:
-            image = rel.target_part.blob
-            image_stream = BytesIO(image)
-            images.append(image_stream)
+            try:
+                image = rel.target_part.blob
+                if image:
+                    image_stream = BytesIO(image)
+                    images.append(image_stream)
+            except Exception as e:
+                st.warning(f"Could not extract image from DOCX: {e}")
     return images
 
 def extract_images_from_pptx(slide):
     """Extracts images from a PPTX slide."""
     images = []
     for shape in slide.shapes:
-        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE and hasattr(shape, 'image') and shape.image.blob:
-            image_stream = BytesIO(shape.image.blob)
-            images.append(image_stream)
+        if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+            try:
+                if hasattr(shape, 'image') and shape.image.blob:
+                    image_stream = BytesIO(shape.image.blob)
+                    images.append(image_stream)
+                else:
+                    st.warning(f"Slide contains a shape marked as an image but lacks an embedded image.")
+            except Exception as e:
+                st.error(f"Error processing an image on slide: {e}")
     return images
 
 def extract_images_from_pdf(page):
@@ -70,11 +80,15 @@ def extract_images_from_pdf(page):
     images = []
     image_list = page.get_images(full=True)
     for img in image_list:
-        xref = img[0]
-        base_image = page.parent.extract_image(xref)
-        image_bytes = base_image["image"]
-        image_stream = BytesIO(image_bytes)
-        images.append(image_stream)
+        try:
+            xref = img[0]
+            base_image = page.parent.extract_image(xref)
+            image_bytes = base_image["image"]
+            if image_bytes:
+                image_stream = BytesIO(image_bytes)
+                images.append(image_stream)
+        except Exception as e:
+            st.warning(f"Could not extract image from PDF: {e}")
     return images
 
 def read_docx(file, openai_client):
@@ -124,7 +138,7 @@ def read_pptx(file, openai_client):
 
     for slide_num, slide in enumerate(presentation.slides, start=1):
         slide_content = f"--- Slide {slide_num} ---\n"
-        slide_content += "\n".join([para.text for para in slide.shapes if para.has_text_frame]) + "\n"
+        slide_content += "\n".join([shape.text for shape in slide.shapes if shape.has_text_frame]) + "\n"
 
         images = extract_images_from_pptx(slide)
         if images:
