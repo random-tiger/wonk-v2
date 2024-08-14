@@ -33,7 +33,6 @@ class OpenAIClient:
         )
         return response.choices[0].message.content
         
-    @retry(tries=3, delay=2, backoff=2, exceptions=(requests.exceptions.RequestException,))
     def transcribe_image(self, base64_image):
         headers = {
             "Content-Type": "application/json",
