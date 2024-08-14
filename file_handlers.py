@@ -87,17 +87,26 @@ def read_pptx(file, openai_client):
         slide_text = f"--- Slide {slide_num} ---\n"
         images = []
         for shape in slide.shapes:
+            # Extract text if available
             if shape.has_text_frame:
                 for paragraph in shape.text_frame.paragraphs:
                     slide_text += paragraph.text + "\n"
-            elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-                if hasattr(shape, 'image') and shape.image.blob:
-                    image_stream = BytesIO(shape.image.blob)
-                    images.append(image_stream)
-                else:
-                    st.warning(f"Slide {slide_num} contains a shape that is marked as an image but does not have an embedded image.")
-
-        slide_text += "\n".join(process_images_concurrently(images, openai_client, f"Slide {slide_num}"))
+            
+            # Process image if the shape is a picture and has a valid blob
+            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+                try:
+                    if hasattr(shape, 'image') and shape.image.blob:
+                        image_stream = BytesIO(shape.image.blob)
+                        images.append(image_stream)
+                    else:
+                        st.warning(f"Slide {slide_num} contains a shape marked as an image but lacks an embedded image.")
+                except Exception as e:
+                    st.error(f"Error processing an image on slide {slide_num}: {e}")
+        
+        # Process images concurrently
+        if images:
+            slide_text += "\n".join(process_images_concurrently(images, openai_client, f"Slide {slide_num}"))
+        
         slides.append(slide_text)
 
     return "\n".join(slides)
