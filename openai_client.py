@@ -7,10 +7,13 @@ class OpenAIClient:
     def __init__(self):
         try:
             self.api_key = st.secrets["openai"]["api_key"]
+            st.write(f"API Key found: {self.api_key}")  # Debug print to check API key
         except KeyError as e:
+            st.error("OPENAI_API_KEY not found in Streamlit secrets")
             raise ValueError("OPENAI_API_KEY not found in Streamlit secrets") from e
 
         if not self.api_key:
+            st.error("OPENAI_API_KEY not set in Streamlit secrets")
             raise ValueError("OPENAI_API_KEY not set in Streamlit secrets")
 
         openai.api_key = self.api_key
@@ -62,3 +65,10 @@ class OpenAIClient:
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
         response.raise_for_status()
         return response.json()['choices'][0]['message']['content']
+
+# Ensure that your Streamlit secrets are correctly configured in .streamlit/secrets.toml
+# [openai]
+# api_key = "your_openai_api_key_here"
+
+# For testing, you can directly print out the secrets
+st.write(f"Secrets: {st.secrets}")
