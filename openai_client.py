@@ -6,16 +6,7 @@ import streamlit as st
 
 class OpenAIClient:
     def __init__(self):
-        try:
-            self.api_key = st.secrets["openai"]["api_key"]
-        except KeyError as e:
-            raise ValueError("OPENAI_API_KEY not found in Streamlit secrets") from e
-
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not set in Streamlit secrets")
-
-        openai.api_key = self.api_key
-        self.client = openai
+        self.api_key = st.secrets["openai"]["api_key"]
 
     def transcribe_audio(self, audio_file):
         # Add a short delay before transcription
@@ -64,3 +55,4 @@ class OpenAIClient:
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
         return response.json()['choices'][0]['message']['content']
+
