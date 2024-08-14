@@ -45,8 +45,16 @@ class OpenAIClient:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "What’s in this image?"},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        {
+                            "type": "text",
+                            "text": "What’s in this image?"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
                     ]
                 }
             ],
@@ -54,5 +62,4 @@ class OpenAIClient:
         }
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-        response.raise_for_status()  # Raise error for HTTP codes 4xx/5xx
         return response.json()['choices'][0]['message']['content']
