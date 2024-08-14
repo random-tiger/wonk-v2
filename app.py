@@ -16,7 +16,7 @@ from pre_canned_prompts import pre_canned_prompts
 from io import BytesIO
 from PIL import Image
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-from streamlit_quill import st_quill  
+from streamlit_quill import st_quill
 import pandas as pd
 from docx import Document
 import time
