@@ -91,9 +91,11 @@ def read_pptx(file, openai_client):
                 for paragraph in shape.text_frame.paragraphs:
                     slide_text += paragraph.text + "\n"
             elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-                image = shape.image
-                image_stream = BytesIO(image.blob)
-                images.append(image_stream)
+                if hasattr(shape, 'image') and shape.image.blob:
+                    image_stream = BytesIO(shape.image.blob)
+                    images.append(image_stream)
+                else:
+                    st.warning(f"Slide {slide_num} contains a shape that is marked as an image but does not have an embedded image.")
 
         slide_text += "\n".join(process_images_concurrently(images, openai_client, f"Slide {slide_num}"))
         slides.append(slide_text)
@@ -107,10 +109,13 @@ def process_images_concurrently(images, openai_client, context):
         for i, future in enumerate(as_completed(futures)):
             try:
                 image_text = future.result()
-                st.info(f"Processed image {i+1}/{len(images)} from {context}")
                 image_texts.append(image_text)
             except Exception as e:
-                st.error(f"Error processing image {i+1}/{len(images)} from {context}: {e}")
+                st.error(f"Error processing an image from {context}: {e}")
+
+    if image_texts:
+        st.info(f"Processed {len(image_texts)} image(s) from {context}")
+
     return image_texts
 
 def encode_image(image):
