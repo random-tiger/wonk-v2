@@ -79,6 +79,8 @@ def main():
             st.session_state.transcriptions = []
 
         transcriptions = process_files(uploaded_files, openai_client)
+        # Filter out None values from transcriptions
+        transcriptions = [t for t in transcriptions if t is not None]
         st.session_state.transcriptions.extend(transcriptions)
 
         if st.session_state.transcriptions:
