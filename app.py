@@ -24,6 +24,23 @@ import time
 
 openai_client = OpenAIClient()
 
+# Function to transcribe audio using Whisper
+def transcribe_audio(audio_file):
+    transcription = client.audio.transcriptions.create(model="whisper-1", file=audio_file)
+    return transcription['text'] if isinstance(transcription, dict) else transcription.text
+
+# Function to generate response based on prompt and model
+def generate_response(transcription, model, custom_prompt):
+    response = client.chat.completions.create(
+        model=model,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": custom_prompt},
+            {"role": "user", "content": transcription}
+        ]
+    )
+    return response.choices[0].message.content
+
 # Function to save meeting minutes as a Word document
 def save_as_docx(minutes):
     doc = Document()
@@ -37,11 +54,145 @@ def save_as_docx(minutes):
     buffer.seek(0)
     return buffer
 
-def process_files(uploaded_files, openai_client):
-    with st.spinner("Processing files..."):
-        # No need to call trim_silence here as it's already handled in file_handlers.py
-        return process_files_concurrently(uploaded_files, openai_client)
+# Function to convert video files to .mp3
+def convert_video_to_mp3(uploaded_file, suffix):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
+        temp_video_file.write(uploaded_file.getbuffer())
+        temp_video_file_path = temp_video_file.name
 
+    video = mp.VideoFileClip(temp_video_file_path)
+
+    if video.audio is None:
+        st.error(f"The uploaded {suffix} file does not contain an audio track.")
+        return None
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
+        audio_file_path = audio_file.name
+
+    video.audio.write_audiofile(audio_file_path)
+    return audio_file_path
+
+# Function to read text from a .docx file
+def read_docx(file):
+    doc = docx.Document(file)
+    return "\n".join([para.text for para in doc.paragraphs])
+
+# Function to read text from a .txt file
+def read_txt(file):
+    return file.read().decode("utf-8")
+
+# Function to read text from an Excel file
+def read_excel(file):
+    df = pd.read_excel(file)
+    return df.to_string(index=False)
+
+# Function to read text from a PDF file
+def read_pdf(file):
+    document = fitz.open(stream=file.read(), filetype="pdf")
+    text = ""
+    for page_num in range(len(document)):
+        page = document.load_page(page_num)
+        text += page.get_text()
+    return text
+
+# Function to read text from a PowerPoint file
+def read_pptx(file):
+    presentation = Presentation(file)
+    text = ""
+    for slide in presentation.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text"):
+                text += shape.text + "\n"
+    return text
+
+# Function to encode image to base64
+def encode_image(image):
+    with BytesIO() as buffer:
+        image.save(buffer, format=image.format)
+        return base64.b64encode(buffer.getvalue()).decode()
+
+# Function to transcribe image using GPT-4's multimodal capabilities
+def transcribe_image(image_file):
+    image = Image.open(image_file)
+    base64_image = encode_image(image)
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"
+    }
+
+    payload = {
+        "model": "gpt-4o-mini",  # Assuming "gpt-4o-mini" is the model with vision capabilities
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "What’s in this image?"
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ],
+        "max_tokens": 300
+    }
+
+    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+    return response.json()['choices'][0]['message']['content']
+
+# Pre-canned prompts and their respective headings
+pre_canned_prompts = {
+    "meeting_summary": {
+        "summary": {
+            "prompt": "You are a highly skilled AI trained in language comprehension and summarization. I would like you to read the following text and summarize it into a concise abstract paragraph. Aim to retain the most important points, providing a coherent and readable summary that could help a person understand the main points of the discussion without needing to read the entire text. Please avoid unnecessary details or tangential points.",
+            "heading": "Summary"
+        },
+        "key_points": {
+            "prompt": "You are a proficient AI with a specialty in distilling information into key points. Based on the following text, identify and list the main points that were discussed or brought up. These should be the most important ideas, findings, or topics that are crucial to the essence of the discussion. Your goal is to provide a list that someone could read to quickly understand what was talked about.",
+            "heading": "Key Points"
+        },
+        "action_items": {
+            "prompt": "You are an AI expert in analyzing conversations and extracting action items. Please review the text and identify any tasks, assignments, or actions that were agreed upon or mentioned as needing to be done. These could be tasks assigned to specific individuals, or general actions that the group has decided to take. Please list these action items clearly and concisely.",
+            "heading": "Action Items"
+        },
+        "sentiment": {
+            "prompt": "As an AI with expertise in language and emotion analysis, your task is to analyze the sentiment of the following text. Please consider the overall tone of the discussion, the emotion conveyed by the language used, and the context in which words and phrases are used. Indicate whether the sentiment is generally positive, negative, or neutral, and provide brief explanations for your analysis where possible.",
+            "heading": "Sentiment Analysis"
+        }
+    },
+    "user_research": {
+        "summary": {
+            "prompt": "You are a highly skilled AI trained in language comprehension and summarization. I would like you to read the following text and summarize it into a concise abstract paragraph. Aim to retain the most important points, providing a coherent and readable summary that could help a person understand the main points of the discussion without needing to read the entire text. Please avoid unnecessary details or tangential points.",
+            "heading": "Summary"
+        },
+        "biographical_info": {
+            "prompt": "You are a proficient AI with a specialty in distilling biographical information about people. Based on the following text, please identify biographical information about the subject of the research study.",
+            "heading": "Biographical Info"
+        },
+        "key_insights": {
+            "prompt": "You are a proficient AI with a specialty in distilling information into key points. Based on the following user research transcript, please identify the key insights. Identify and list the main points that were discussed or brought up. These should be the most important ideas, findings, or topics that are crucial to the essence of the discussion. Your goal is to provide a list that someone could read to quickly understand what was talked about.",
+            "heading": "Key Insights"
+        },
+        "recommendations": {
+            "prompt": "You are a proficient AI with a specialty in identifying meaningful product opportunities. Based on the transcript, please identify product recommendations/opportunities.",
+            "heading": "Recommendations"
+        }
+    },
+    "action_items": {
+        "action_items": {
+            "prompt": "You are an AI expert in analyzing conversations and extracting action items. Please review the text and identify any tasks, assignments, or actions that were agreed upon or mentioned as needing to be done. These could be tasks assigned to specific individuals, or general actions that the group has decided to take. Please list these action items clearly and concisely. Each task should be formatted as follows: Topic. Description of the task. Do not use sub-bullets.",
+            "heading": "Action Items"
+        }
+    }
+}
+
+# Streamlit app
 def main():
     # Custom CSS to set app width and reduce gutter space
     st.markdown(
