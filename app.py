@@ -1,28 +1,24 @@
 import streamlit as st
 import os
-from file_handlers import (
-    convert_video_to_mp3,
-    read_docx,
-    read_txt,
-    read_excel,
-    read_pdf,
-    read_pptx,
-    encode_image,
-    process_files_concurrently,
-    trim_silence
-)
-from openai_client import OpenAIClient
-from pre_canned_prompts import pre_canned_prompts
+from openai import OpenAI
+from docx import Document
 from io import BytesIO
-from PIL import Image
+import moviepy.editor as mp
+import tempfile
+import docx
+import pandas as pd
+import fitz
+import base64
+import requests
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from streamlit_quill import st_quill
-import pandas as pd
-from docx import Document
-import time
+from pptx import Presentation
+from PIL import Image
 
+api_key = st.secrets["OPENAI_API_KEY"]
 
-openai_client = OpenAIClient()
+# Initialize OpenAI client
+client = OpenAI(api_key=api_key)
 
 # Function to transcribe audio using Whisper
 def transcribe_audio(audio_file):
@@ -214,7 +210,7 @@ def main():
         unsafe_allow_html=True
     )
 
-    st.sidebar.title("Chief of Staff Assistant")
+    st.sidebar.title("Wonk")
 
     st.sidebar.info("Upload mp3, mp4, mov, docx, txt, xlsx, pdf, pptx, or image files to start!")
     uploaded_files = st.sidebar.file_uploader("Upload audio, video, text, or image files", type=["mp3", "mp4", "mov", "docx", "txt", "xlsx", "pdf", "pptx", "jpg", "jpeg", "png"], accept_multiple_files=True)
@@ -260,7 +256,7 @@ def main():
         st.sidebar.info("Select what you'd like to create!")
         summary_type = st.sidebar.radio(
             "Select the type of summary you want to generate:",
-            ("", "Meeting Summary", "User Research", "Action Items"),
+            ("", "Meeting Summary", "User Research Synthesis", "Action Items"),
             index=0
         )
 
@@ -278,8 +274,8 @@ def main():
                 "sentiment": st.sidebar.checkbox("Sentiment Analysis")
             }
 
-        elif summary_type == "User Research":
-            st.sidebar.markdown("### User Research Prompts")
+        elif summary_type == "User Research Synthesis":
+            st.sidebar.markdown("### User Research Synthesis Prompts")
             st.sidebar.info("Select the sections you'd like in your document!")
             checkboxes = {
                 "summary": st.sidebar.checkbox("Summary", key="user_summary"),
