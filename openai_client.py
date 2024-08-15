@@ -7,6 +7,7 @@ import streamlit as st
 class OpenAIClient:
     def __init__(self):
         self.api_key = st.secrets["openai"]["api_key"]
+        self.client = OpenAI(api_key=self.api_key)
 
     def transcribe_audio(self, audio_file):
         # Add a short delay before transcription
