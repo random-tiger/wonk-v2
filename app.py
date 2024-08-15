@@ -22,9 +22,9 @@ from docx import Document
 import time
 
 # Initialize OpenAI client
-client = OpenAIClient()
+# client = OpenAIClient()
 openai_client = OpenAIClient()
-api_key = client.api_key
+# api_key = client.api_key
 
 # Function to save meeting minutes as a Word document
 def save_as_docx(minutes):
