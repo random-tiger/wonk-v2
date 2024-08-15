@@ -24,6 +24,8 @@ import time
 # Initialize OpenAI client
 openai_client = OpenAIClient()
 
+client = OpenAIClient()
+
 # Function to save meeting minutes as a Word document
 def save_as_docx(minutes):
     doc = Document()
