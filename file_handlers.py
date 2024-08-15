@@ -17,6 +17,7 @@ from pydub.silence import detect_nonsilent
 import time
 from openai_client import OpenAIClient
 
+# Function to convert video files to .mp3
 def convert_video_to_mp3(uploaded_file, suffix):
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_video_file:
         temp_video_file.write(uploaded_file.getbuffer())
@@ -25,6 +26,7 @@ def convert_video_to_mp3(uploaded_file, suffix):
     video = mp.VideoFileClip(temp_video_file_path)
 
     if video.audio is None:
+        st.error(f"The uploaded {suffix} file does not contain an audio track.")
         return None
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as audio_file:
@@ -32,6 +34,7 @@ def convert_video_to_mp3(uploaded_file, suffix):
 
     video.audio.write_audiofile(audio_file_path)
     return audio_file_path
+
 
 def read_docx(file, openai_client):
     doc = docx.Document(file)
